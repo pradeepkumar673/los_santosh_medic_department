@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useRealtimeAppointments } from "../../hooks/useRealtimeAppointments";
+import { PatientStatusChangedPayload } from "../../services/socket.service";
 
 const APPOINTMENTS = [
   { id: 1, doc: "Dr. Kavitha Ramesh", dept: "Cardiology", day: "25", month: "JUN", time: "10:30 AM", type: "Consultation", status: "upcoming", fee: 600 },
@@ -19,6 +21,15 @@ const statusBadge = (s: string) => {
 
 export default function MyAppointmentsPage({ onBook }: { onBook: () => void }) {
   const [filter, setFilter] = useState<Filter>("all");
+
+  useRealtimeAppointments({
+    showToasts: true,
+    onPatientStatusChanged: (payload: PatientStatusChangedPayload) => {
+      // Optionally refetch appointments list when status changes
+      // fetchAppointments();
+      console.log("Appointment status changed:", payload);
+    },
+  });
 
   const filtered = APPOINTMENTS.filter(a => filter === "all" || a.status === filter);
 

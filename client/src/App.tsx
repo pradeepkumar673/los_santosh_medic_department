@@ -1,3 +1,4 @@
+// client/src/App.tsx
 import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
@@ -8,8 +9,6 @@ import { useSocketLifecycle } from "./hooks/useSocketLifecycle";
 function App() {
   const fetchCurrentUser = useAuthStore((s) => s.fetchCurrentUser);
 
-  // Why: cookies are httpOnly — the only way to know if a session survived
-  // a hard refresh is to ask the server, done once before any route renders.
   useEffect(() => {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
@@ -18,7 +17,27 @@ function App() {
 
   return (
     <>
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-right"
+        gutter={10}
+        toastOptions={{
+          duration: 4000,
+          style: {
+            borderRadius: "10px",
+            fontSize: "13px",
+            maxWidth: "380px",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+          },
+          success: {
+            iconTheme: { primary: "#059669", secondary: "#fff" },
+            style: { background: "#ECFDF5", color: "#065F46", border: "1px solid #A7F3D0" },
+          },
+          error: {
+            iconTheme: { primary: "#DC2626", secondary: "#fff" },
+            style: { background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA" },
+          },
+        }}
+      />
       <RouterProvider router={router} />
     </>
   );

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
 
 const DOCTORS = [
   { id: 1, name: "Dr. Kavitha Ramesh", spec: "Cardiologist", dept: "Cardiology", tag: "Heart", exp: "12 yrs", fee: 600, avail: "available", rating: "4.9", initials: "KR", color: "bg-blue-100 text-blue-700" },
@@ -251,7 +252,12 @@ export default function BookAppointmentPage({ onBooked }: { onBooked: () => void
           </div>
           <div className="flex gap-3">
             <button onClick={() => setStep(3)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">← Edit</button>
-            <button onClick={onBooked} className="flex-[2] py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium transition-colors">Confirm booking</button>
+            <button onClick={() => {
+              toast.success("🎉 Appointment booked successfully! Check your queue status.", {
+                duration: 6000,
+              });
+              onBooked();
+            }} className="flex-[2] py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium transition-colors">Confirm booking</button>
           </div>
         </div>
       )}

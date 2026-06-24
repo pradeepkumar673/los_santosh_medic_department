@@ -13,6 +13,8 @@ import MedicalHistoryPage from "../pages/patient/MedicalHistoryPage";
 import BookAppointmentPage from "../pages/patient/BookAppointmentPage";
 import MyAppointmentsPage from "../pages/patient/MyAppointmentsPage";
 import DoctorDashboardPage from "../pages/doctor/DoctorDashboardPage";
+import DoctorQueuePage from "../pages/doctor/DoctorQueuePage";
+import ReceptionDashboard from "../pages/reception/ReceptionDashboard";
 
 const PatientAppointments = () => {
   const navigate = useNavigate();
@@ -55,7 +57,7 @@ export const router = createBrowserRouter([
             element: <RoleRoute allowedRoles={["doctor"]} />,
             children: [
               { path: "/doctor/dashboard", element: <DoctorDashboardPage /> },
-              { path: "/doctor/queue", element: <PageStub title="Live Queue" /> },
+              { path: "/doctor/queue", element: <DoctorQueuePage /> },
               { path: "/doctor/appointments", element: <PageStub title="Appointments" /> },
               { path: "/doctor/patients", element: <PageStub title="My Patients" /> },
             ],
@@ -71,7 +73,7 @@ export const router = createBrowserRouter([
           {
             element: <RoleRoute allowedRoles={["reception", "admin"]} />,
             children: [
-              { path: "/reception/dashboard", element: <PageStub title="Reception Dashboard" /> },
+              { path: "/reception/dashboard", element: <ReceptionDashboard /> },
               { path: "/reception/appointments", element: <PageStub title="Appointments" /> },
               { path: "/reception/queue", element: <PageStub title="Queue Management" /> },
               { path: "/reception/beds", element: <PageStub title="Bed Board" /> },
