@@ -8,11 +8,6 @@ const PRIORITY_COLOR: Record<string, string> = {
   low: "bg-gray-400 text-white",
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  waiting: "text-yellow-400",
-  called: "text-green-400",
-  in_progress: "text-blue-400",
-};
 
 type Props = {
   doctorId: string;

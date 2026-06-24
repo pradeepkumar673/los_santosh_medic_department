@@ -18,6 +18,7 @@ import adminRoutes from "./routes/admin.routes";
 import departmentRoutes from "./routes/department.routes";
 import bedRoutes from "./routes/bed.routes";
 import appointmentRoutes from "./routes/appointment.routes";
+import assessmentRoutes from "./routes/assessment.routes";
 
 const app: Application = express();
 
@@ -76,6 +77,7 @@ app.use("/api/departments", departmentRoutes);
 app.use("/api/beds", bedRoutes);
 app.use("/api/queue", queueRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/assessments", assessmentRoutes);
 app.use("/api/admin", adminRoutes);
 
 // ---------- 404 + error handling ----------
