@@ -108,9 +108,27 @@ export const initSocket = (httpServer: HttpServer): SocketIOServer => {
       }
     });
 
+    // Patients join their own room to receive turn notifications
+    socket.on("join:my-queue", (patientId: string) => {
+      if (
+        socket.user?.id === patientId ||
+        ["doctor", "nurse", "reception", "admin"].includes(socket.user?.role || "")
+      ) {
+        socket.join(ROOMS.patient(patientId));
+        console.log(`Socket ${socket.id} joined patient room: ${patientId}`);
+      }
+    });
+
+    // Reception / kiosk screens subscribe to a specific doctor's live queue
+    socket.on("join:doctor-live", (doctorId: string) => {
+      socket.join(ROOMS.doctor(doctorId));
+      console.log(`Socket ${socket.id} subscribed to doctor queue: ${doctorId}`);
+    });
+
     socket.on("disconnect", (reason) => {
       console.log(`🔌 Socket disconnected: ${socket.id} (${reason})`);
     });
+
   });
 
   return io;
