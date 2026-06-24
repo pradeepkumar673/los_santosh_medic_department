@@ -12,6 +12,7 @@ import LiveQueuePage from "../pages/patient/LiveQueuePage";
 import MedicalHistoryPage from "../pages/patient/MedicalHistoryPage";
 import BookAppointmentPage from "../pages/patient/BookAppointmentPage";
 import MyAppointmentsPage from "../pages/patient/MyAppointmentsPage";
+import DoctorDashboardPage from "../pages/doctor/DoctorDashboardPage";
 
 const PatientAppointments = () => {
   const navigate = useNavigate();
@@ -53,7 +54,7 @@ export const router = createBrowserRouter([
           {
             element: <RoleRoute allowedRoles={["doctor"]} />,
             children: [
-              { path: "/doctor/dashboard", element: <PageStub title="Doctor Dashboard" /> },
+              { path: "/doctor/dashboard", element: <DoctorDashboardPage /> },
               { path: "/doctor/queue", element: <PageStub title="Live Queue" /> },
               { path: "/doctor/appointments", element: <PageStub title="Appointments" /> },
               { path: "/doctor/patients", element: <PageStub title="My Patients" /> },
