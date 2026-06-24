@@ -28,6 +28,8 @@ export interface IAppointment extends Document {
   completedAt?: Date;
   queueEntry?: Types.ObjectId;
   createdBy: Types.ObjectId; // user who created it (reception/patient)
+  noShowRiskScore?: number;
+  noShowRiskLevel?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -104,6 +106,15 @@ const appointmentSchema = new Schema<IAppointment>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+    noShowRiskScore: {
+      type: Number,
+      default: null,
+    },
+    noShowRiskLevel: {
+      type: String,
+      enum: ["Low", "Medium", "High", null],
+      default: null,
     },
   },
   { timestamps: true }

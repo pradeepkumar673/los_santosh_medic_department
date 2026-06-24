@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
+import { differenceInYears, differenceInDays, format } from "date-fns";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import { ApiResponse } from "../utils/ApiResponse";
@@ -7,6 +8,8 @@ import Appointment from "../models/Appointment.model";
 import QueueEntry from "../models/QueueEntry.model";
 import Doctor from "../models/Doctor.model";
 import Department from "../models/Department.model";
+import Patient from "../models/Patient.model";
+import { getNoShowPrediction, NoShowPredictionInput } from "../services/noShowPrediction.service";
 import { getIO, ROOMS } from "../config/socket";
 
 // ---------------------------------------------------------------------------
@@ -68,6 +71,50 @@ async function broadcastQueueUpdate(
   io.to(ROOMS.adminDashboard).emit("queue-updated", payload);
 }
 
+async function buildNoShowFeatures(
+  appointment: any,
+  patient: any,
+  department: any
+): Promise<NoShowPredictionInput> {
+  const age = differenceInYears(new Date(), new Date(patient.dateOfBirth));
+
+  const pastAppointments = await Appointment.find({
+    patient: patient._id,
+    _id: { $ne: appointment._id },
+    status: { $in: ["completed", "no_show", "cancelled"] },
+  });
+  const totalPastAppointments = pastAppointments.length;
+  const pastNoShows = pastAppointments.filter((a) => a.status === "no_show").length;
+
+  const leadTimeDays = Math.max(
+    0,
+    differenceInDays(new Date(appointment.scheduledDate), new Date(appointment.createdAt))
+  );
+
+  const hour = parseInt((appointment.scheduledTimeSlot || "09:00").split(":")[0], 10);
+  const timeSlot = hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
+
+  const distanceKm = await estimateDistanceKm(patient.address);
+
+  return {
+    age,
+    past_no_shows: pastNoShows,
+    total_past_appointments: totalPastAppointments,
+    distance_km: distanceKm,
+    lead_time_days: leadTimeDays,
+    day_of_week: format(new Date(appointment.scheduledDate), "EEEE"),
+    time_slot: timeSlot,
+    department: department.name,
+    appointment_type: appointment.appointmentType,
+  };
+}
+
+async function estimateDistanceKm(_address: any): Promise<number> {
+  // placeholder — wire up a real geocoding/distance API here
+  return 10;
+}
+
+
 // ---------------------------------------------------------------------------
 // POST /api/appointments  — Book Appointment
 // ---------------------------------------------------------------------------
@@ -88,13 +135,15 @@ export const bookAppointment = asyncHandler(async (req: Request, res: Response) 
   const io = getIO();
 
   // ── 1. Guard checks ────────────────────────────────────────────────────────
-  const [doctor, department] = await Promise.all([
+  const [doctor, department, patientDoc] = await Promise.all([
     Doctor.findById(doctorId).lean(),
     Department.findById(departmentId).lean(),
+    Patient.findById(patient).lean(),
   ]);
 
   if (!doctor) throw ApiError.notFound("Doctor not found");
   if (!department) throw ApiError.notFound("Department not found");
+  if (!patientDoc) throw ApiError.notFound("Patient not found");
   if (doctor.isOnLeave) throw ApiError.badRequest("Doctor is currently on leave");
 
   // ── 2. Prevent double-booking same patient on same day ────────────────────
@@ -185,6 +234,21 @@ export const bookAppointment = asyncHandler(async (req: Request, res: Response) 
 
     await session.commitTransaction();
 
+    // ── 4.5 Compute ML No-Show Prediction ──────────────────────────────────
+    let noShowRisk = null;
+    try {
+      const features = await buildNoShowFeatures(appointment, patientDoc, department);
+      noShowRisk = await getNoShowPrediction(features);
+      if (noShowRisk) {
+        await Appointment.findByIdAndUpdate(appointment._id, {
+          noShowRiskScore: noShowRisk.no_show_probability,
+          noShowRiskLevel: noShowRisk.risk_level,
+        });
+      }
+    } catch (predictErr) {
+      console.error("Failed to compute no-show prediction:", predictErr);
+    }
+
     // ── 5. Socket events ───────────────────────────────────────────────────
     const populated = await Appointment.findById(appointment._id)
       .populate("patient", "user")
@@ -204,7 +268,7 @@ export const bookAppointment = asyncHandler(async (req: Request, res: Response) 
     }
 
     return res.status(201).json(
-      new ApiResponse(201, { appointment: populated, queueEntry }, "Appointment booked successfully")
+      new ApiResponse(201, { appointment: populated, queueEntry, noShowRisk }, "Appointment booked successfully")
     );
   } catch (err) {
     await session.abortTransaction();

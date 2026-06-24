@@ -31,3 +31,11 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Python environment, caches, and models
+__pycache__/
+*.pyc
+ai-no-show-service/models/
+.venv/
+venv/
+
