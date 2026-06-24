@@ -8,6 +8,10 @@ import {
   updateBed,
   updateBedStatus,
   deleteBed,
+  allocateBed,
+  dischargeBed,
+  getAllocations,
+  getAllocationById,
 } from "../controllers/bed.controller";
 import {
   createBedSchema,
@@ -15,24 +19,70 @@ import {
   updateBedStatusSchema,
   getBedByIdSchema,
   listBedsSchema,
+  allocateBedSchema,
+  dischargeBedSchema,
+  listAllocationsSchema,
 } from "../validators/bed.validator";
+import { z } from "zod";
+import { objectId } from "../validators/common";
 
 const router = Router();
 
 router.use(authenticate);
 
+router.get(
+  "/allocations",
+  authorize("admin", "reception", "doctor", "nurse"),
+  validate(listAllocationsSchema),
+  getAllocations
+);
+
+router.get(
+  "/allocations/:id",
+  authorize("admin", "reception", "doctor", "nurse"),
+  validate(
+    z.object({
+      body: z.object({}).optional(),
+      params: z.object({ id: objectId }),
+      query: z.object({}).optional(),
+    })
+  ),
+  getAllocationById
+);
+
 router
   .route("/")
   .post(authorize("admin"), validate(createBedSchema), createBed)
-  .get(authorize("admin", "reception", "doctor", "nurse"), validate(listBedsSchema), getBeds);
+  .get(
+    authorize("admin", "reception", "doctor", "nurse"),
+    validate(listBedsSchema),
+    getBeds
+  );
 
 router
   .route("/:id")
-  .get(authorize("admin", "reception", "doctor", "nurse"), validate(getBedByIdSchema), getBedById)
+  .get(
+    authorize("admin", "reception", "doctor", "nurse"),
+    validate(getBedByIdSchema),
+    getBedById
+  )
   .patch(authorize("admin"), validate(updateBedSchema), updateBed)
   .delete(authorize("admin"), validate(getBedByIdSchema), deleteBed);
 
-// Dedicated endpoint for status transitions (assign patient / discharge / send to cleaning / maintenance)
+router.post(
+  "/:id/allocate",
+  authorize("admin", "reception"),
+  validate(allocateBedSchema),
+  allocateBed
+);
+
+router.post(
+  "/:id/discharge",
+  authorize("admin", "reception", "nurse"),
+  validate(dischargeBedSchema),
+  dischargeBed
+);
+
 router.patch(
   "/:id/status",
   authorize("admin", "reception", "nurse"),

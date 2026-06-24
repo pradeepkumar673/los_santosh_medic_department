@@ -21,7 +21,6 @@ export const updateBedSchema = z.object({
   query: z.object({}).optional(),
 });
 
-// Dedicated schema for the status-transition endpoint (assign/discharge/clean/maintain)
 export const updateBedStatusSchema = z.object({
   body: z
     .object({
@@ -42,6 +41,31 @@ export const updateBedStatusSchema = z.object({
   query: z.object({}).optional(),
 });
 
+export const allocateBedSchema = z.object({
+  body: z.object({
+    patientId: objectId,
+    expectedDischargeDate: z.coerce
+      .date()
+      .refine((d) => d > new Date(), { message: "Expected discharge date must be in the future" })
+      .optional(),
+    admissionReason: z.string().trim().min(3).max(500),
+  }),
+  params: z.object({ id: objectId }),
+  query: z.object({}).optional(),
+});
+
+export const dischargeBedSchema = z.object({
+  body: z.object({
+    dischargeNotes: z.string().trim().max(1000).optional(),
+    nextStatus: z
+      .enum(["vacant", "cleaning", "maintenance"])
+      .optional()
+      .default("cleaning"),
+  }),
+  params: z.object({ id: objectId }),
+  query: z.object({}).optional(),
+});
+
 export const getBedByIdSchema = z.object({
   body: z.object({}).optional(),
   params: z.object({ id: objectId }),
@@ -56,5 +80,17 @@ export const listBedsSchema = z.object({
     bedType: z.enum(["general", "icu", "emergency", "private", "pediatric", "maternity"]).optional(),
     department: objectId.optional(),
     ward: z.string().optional(),
+    floor: z.coerce.number().int().min(0).optional(),
+  }),
+});
+
+export const listAllocationsSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({}).optional(),
+  query: paginationQuery.extend({
+    patient: objectId.optional(),
+    department: objectId.optional(),
+    bed: objectId.optional(),
+    status: z.enum(["active", "discharged", "transferred"]).optional(),
   }),
 });
