@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import AuthLayout from "../layouts/AuthLayout";
 import { ProtectedRoute, RoleRoute, RoleIndexRedirect } from "../routes/guards";
@@ -7,6 +7,21 @@ import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ProfilePage from "../pages/profile/ProfilePage";
 import { UnauthorizedPage, NotFoundPage } from "../pages/errors";
+import PatientDashboardPage from "../pages/patient/PatientDashboardPage";
+import LiveQueuePage from "../pages/patient/LiveQueuePage";
+import MedicalHistoryPage from "../pages/patient/MedicalHistoryPage";
+import BookAppointmentPage from "../pages/patient/BookAppointmentPage";
+import MyAppointmentsPage from "../pages/patient/MyAppointmentsPage";
+
+const PatientAppointments = () => {
+  const navigate = useNavigate();
+  return <MyAppointmentsPage onBook={() => navigate("/patient/book")} />;
+};
+
+const PatientBookAppointment = () => {
+  const navigate = useNavigate();
+  return <BookAppointmentPage onBooked={() => navigate("/patient/appointments")} />;
+};
 
 export const router = createBrowserRouter([
   {
@@ -28,9 +43,11 @@ export const router = createBrowserRouter([
           {
             element: <RoleRoute allowedRoles={["patient"]} />,
             children: [
-              { path: "/patient/dashboard", element: <PageStub title="Patient Dashboard" /> },
-              { path: "/patient/appointments", element: <PageStub title="My Appointments" /> },
-              { path: "/patient/queue", element: <PageStub title="Queue Status" /> },
+              { path: "/patient/dashboard", element: <PatientDashboardPage /> },
+              { path: "/patient/book", element: <PatientBookAppointment /> },
+              { path: "/patient/appointments", element: <PatientAppointments /> },
+              { path: "/patient/queue", element: <LiveQueuePage /> },
+              { path: "/patient/history", element: <MedicalHistoryPage /> },
             ],
           },
           {

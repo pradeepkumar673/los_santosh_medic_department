@@ -14,8 +14,10 @@ export interface SidebarItem {
 export const SIDEBAR_CONFIG: Record<UserRole, SidebarItem[]> = {
   patient: [
     { label: "Dashboard", path: "/patient/dashboard", icon: LayoutDashboard },
+    { label: "Book Appointment", path: "/patient/book", icon: Stethoscope },
     { label: "My Appointments", path: "/patient/appointments", icon: CalendarClock },
     { label: "Queue Status", path: "/patient/queue", icon: ListChecks },
+    { label: "Medical History", path: "/patient/history", icon: ClipboardList },
     { label: "Profile", path: "/profile", icon: User },
   ],
   doctor: [
