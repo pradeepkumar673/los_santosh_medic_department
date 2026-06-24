@@ -5,12 +5,16 @@ import { ApiError } from "../utils/ApiError";
 import { asyncHandler } from "../utils/asyncHandler";
 import User, { UserRole } from "../models/User.model";
 
+// ---------------------------------------------------------------------------
+// Type augmentation — makes req.user available throughout the app
+// ---------------------------------------------------------------------------
 export interface AccessTokenPayload {
   id: string;
   role: UserRole;
+  iat?: number;
+  exp?: number;
 }
 
-// Augment Express Request to carry the authenticated user
 declare global {
   namespace Express {
     interface Request {
@@ -19,13 +23,19 @@ declare global {
   }
 }
 
+// ---------------------------------------------------------------------------
+// authenticate
+// ---------------------------------------------------------------------------
 /**
- * Verifies the JWT access token from the HTTP-only cookie.
- * Attaches `{ id, role }` to req.user on success.
+ * Verifies the JWT access token stored in the `accessToken` HTTP-only cookie.
+ * On success, attaches `{ id, role }` to `req.user` and calls `next()`.
+ *
+ * Distinguishes between expired tokens (→ 401 with a "refresh" hint) and
+ * outright invalid tokens, so the client can react accordingly.
  */
 export const authenticate = asyncHandler(
   async (req: Request, _res: Response, next: NextFunction) => {
-    const token = req.cookies?.accessToken;
+    const token: string | undefined = req.cookies?.accessToken;
 
     if (!token) {
       throw ApiError.unauthorized("Access token missing. Please log in.");
@@ -36,61 +46,82 @@ export const authenticate = asyncHandler(
       decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;
     } catch (err) {
       if (err instanceof jwt.TokenExpiredError) {
-        throw ApiError.unauthorized("Access token expired. Please refresh your session.");
+        throw ApiError.unauthorized(
+          "Access token has expired. Please refresh your session."
+        );
       }
       throw ApiError.unauthorized("Invalid access token.");
     }
 
-    // Confirm the user still exists and is active
+    // Verify the user still exists and is still active
     const user = await User.findById(decoded.id).select("_id role isActive");
     if (!user) {
-      throw ApiError.unauthorized("User no longer exists.");
+      throw ApiError.unauthorized("The account associated with this token no longer exists.");
     }
     if (!user.isActive) {
-      throw ApiError.forbidden("This account has been deactivated.");
+      throw ApiError.forbidden("This account has been deactivated. Contact an administrator.");
     }
 
-    req.user = { id: user.id, role: user.role as UserRole };
+    req.user = { id: user.id as string, role: user.role as UserRole };
     next();
   }
 );
 
+// ---------------------------------------------------------------------------
+// authorize
+// ---------------------------------------------------------------------------
 /**
- * Restricts a route to one or more roles.
- * Usage: router.get("/admin-only", authenticate, authorize("admin"), handler)
+ * Role-based access control gate.
+ * Must be used **after** `authenticate` so that `req.user` is populated.
+ *
+ * Usage:
+ *   router.delete("/users/:id", authenticate, authorize("admin"), handler)
+ *   router.get("/records", authenticate, authorize("doctor", "nurse"), handler)
  */
 export const authorize = (...allowedRoles: UserRole[]) => {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) {
-      throw ApiError.unauthorized("You must be logged in to access this resource.");
+      throw ApiError.unauthorized("Authentication required. Please log in.");
     }
+
     if (!allowedRoles.includes(req.user.role)) {
       throw ApiError.forbidden(
-        `Access denied. Requires role(s): ${allowedRoles.join(", ")}.`
+        `Access denied. This action requires one of the following roles: ${allowedRoles.join(", ")}.`
       );
     }
+
     next();
   };
 };
 
+// ---------------------------------------------------------------------------
+// optionalAuth
+// ---------------------------------------------------------------------------
 /**
- * Optional auth — attaches req.user if a valid token is present,
- * but does not throw if absent. Useful for public-but-personalized routes.
+ * Soft authentication middleware — attaches `req.user` if a valid access
+ * token is present, but silently skips (without throwing) when it is absent
+ * or invalid.  Useful for routes that are public but can serve personalized
+ * content when called by an authenticated user.
  */
 export const optionalAuth = asyncHandler(
   async (req: Request, _res: Response, next: NextFunction) => {
-    const token = req.cookies?.accessToken;
+    const token: string | undefined = req.cookies?.accessToken;
     if (!token) return next();
 
     try {
-      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;
+      const decoded = jwt.verify(
+        token,
+        env.JWT_ACCESS_SECRET
+      ) as AccessTokenPayload;
+
       const user = await User.findById(decoded.id).select("_id role isActive");
       if (user && user.isActive) {
-        req.user = { id: user.id, role: user.role as UserRole };
+        req.user = { id: user.id as string, role: user.role as UserRole };
       }
     } catch {
-      // silently ignore invalid/expired token for optional auth
+      // Silently ignore invalid / expired tokens for optional auth
     }
+
     next();
   }
 );
