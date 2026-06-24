@@ -1,22 +1,33 @@
 import { Router } from "express";
 import { authenticate, authorize } from "../middlewares/auth";
-import { clinicalStaffOnly, adminOnly } from "../middlewares/role";
+import { validate } from "../middlewares/validate";
+import {
+  createDoctor,
+  getDoctors,
+  getDoctorById,
+  updateDoctor,
+  deleteDoctor,
+} from "../controllers/doctor.controller";
+import {
+  createDoctorSchema,
+  updateDoctorSchema,
+  getDoctorByIdSchema,
+  listDoctorsSchema,
+} from "../validators/doctor.validator";
 
 const router = Router();
 
-// Any authenticated clinical staff (doctor, nurse, admin)
-router.get("/queue/live", authenticate, clinicalStaffOnly, (req, res) => {
-  res.json({ success: true, message: "Live queue placeholder" });
-});
+router.use(authenticate);
 
-// Admin-only example
-router.delete("/:id", authenticate, adminOnly, (req, res) => {
-  res.json({ success: true, message: "Doctor deleted (placeholder)" });
-});
+router
+  .route("/")
+  .post(authorize("admin"), validate(createDoctorSchema), createDoctor)
+  .get(authorize("admin", "reception", "doctor", "nurse", "patient"), validate(listDoctorsSchema), getDoctors);
 
-// Equivalent using authorize() directly instead of the named helper
-router.patch("/:id/status", authenticate, authorize("doctor", "admin"), (req, res) => {
-  res.json({ success: true, message: "Status updated (placeholder)" });
-});
+router
+  .route("/:id")
+  .get(authorize("admin", "reception", "doctor", "nurse", "patient"), validate(getDoctorByIdSchema), getDoctorById)
+  .patch(authorize("admin", "doctor"), validate(updateDoctorSchema), updateDoctor)
+  .delete(authorize("admin"), validate(getDoctorByIdSchema), deleteDoctor);
 
 export default router;

@@ -15,6 +15,8 @@ import patientRoutes from "./routes/patient.routes";
 import doctorRoutes from "./routes/doctor.routes";
 import queueRoutes from "./routes/queue.routes";
 import adminRoutes from "./routes/admin.routes";
+import departmentRoutes from "./routes/department.routes";
+import bedRoutes from "./routes/bed.routes";
 
 const app: Application = express();
 
@@ -69,6 +71,8 @@ app.get("/health", (_req: Request, res: Response) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/patients", patientRoutes);
 app.use("/api/doctors", doctorRoutes);
+app.use("/api/departments", departmentRoutes);
+app.use("/api/beds", bedRoutes);
 app.use("/api/queue", queueRoutes);
 app.use("/api/admin", adminRoutes);
 

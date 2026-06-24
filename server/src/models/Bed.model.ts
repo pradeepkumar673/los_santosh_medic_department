@@ -1,7 +1,7 @@
 import { Schema, model, Document, Types } from "mongoose";
 
 export type BedType = "general" | "icu" | "emergency" | "private" | "pediatric" | "maternity";
-export type BedStatus = "available" | "occupied" | "reserved" | "maintenance" | "cleaning";
+export type BedStatus = "vacant" | "occupied" | "cleaning" | "maintenance";
 
 export interface IBed extends Document {
   bedNumber: string;
@@ -45,8 +45,8 @@ const bedSchema = new Schema<IBed>(
     },
     status: {
       type: String,
-      enum: ["available", "occupied", "reserved", "maintenance", "cleaning"],
-      default: "available",
+      enum: ["vacant", "occupied", "cleaning", "maintenance"],
+      default: "vacant",
     },
     department: {
       type: Schema.Types.ObjectId,
@@ -86,6 +86,9 @@ bedSchema.index({ bedType: 1, status: 1 });
 bedSchema.pre("validate", function (next) {
   if (this.status === "occupied" && !this.currentPatient) {
     return next(new Error("Occupied beds must have a currentPatient assigned"));
+  }
+  if (this.status !== "occupied" && this.currentPatient) {
+    return next(new Error("Only occupied beds may have a currentPatient assigned"));
   }
   next();
 });
