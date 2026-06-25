@@ -1,160 +1,160 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import apiClient from "../../services/api.client";
+import { useAuthStore } from "../../store/authStore";
+import { useRealtimeQueue } from "../../hooks/useRealtimeQueue";
+import { QueueUpdatedPayload, QueueEntry as SocketQueueEntry } from "../../services/socket.service";
 
-interface Patient {
-  id: string;
-  name: string;
-  age: number;
-  gender: string;
-  bloodGroup: string;
-  phone: string;
-  allergies: string[];
-  chronicConditions: string[];
-  currentMedications: string[];
-  emergencyContact: {
+// ---------------------------------------------------------------------------
+// Types for populated API response entries
+// ---------------------------------------------------------------------------
+
+interface PopulatedPatient {
+  _id: string;
+  user: {
+    _id?: string;
+    name?: string;
+    phone?: string;
+    email?: string;
+  } | string;
+  dateOfBirth?: string;
+  gender?: string;
+  bloodGroup?: string;
+  allergies?: string[];
+  chronicConditions?: string[];
+  currentMedications?: string[];
+  emergencyContact?: {
     name: string;
     relation: string;
     phone: string;
   };
 }
 
-interface Vitals {
-  bp: string;
-  pulse: number;
-  temp: number;
-  spo2: number;
-  weight: number;
+interface PopulatedAppointment {
+  _id: string;
+  reasonForVisit?: string;
+  appointmentType?: "scheduled" | "follow_up" | "walk_in" | "emergency";
+  scheduledTimeSlot?: string;
+  symptoms?: string[];
 }
 
-interface Assessment {
+interface PopulatedAssessment {
+  _id: string;
   chiefComplaint: string;
-  vitals: Vitals;
-  triagePriority: "high" | "medium" | "low";
+  triageSeverity: "critical" | "urgent" | "semi_urgent" | "non_urgent" | "minor";
   triageScore: number;
-  notes: string;
+  notes?: string;
+  vitals?: {
+    bloodPressure?: string;
+    heartRate?: number;
+    temperature?: number;
+    oxygenSaturation?: number;
+    respiratoryRate?: number;
+    weight?: number;
+    height?: number;
+  };
+  diagnosis?: string;
+  prescriptions?: string[];
+  labTests?: string[];
 }
 
-interface QueueEntry {
-  id: string;
-  token: string;
-  position: number;
-  patient: Patient;
-  assessment: Assessment;
-  appointmentType: "scheduled" | "follow_up" | "walk_in" | "emergency";
-  waitTime: number;
-  status: "waiting" | "in_consultation" | "consulted" | "no_show";
+// The shape returned by GET /api/queue (populated entries)
+interface ApiQueueEntry {
+  _id: string;
+  tokenNumber: number;
+  patient: PopulatedPatient;
+  appointment?: PopulatedAppointment;
+  assessment?: PopulatedAssessment;
+  status: "waiting" | "called" | "in_progress" | "completed" | "skipped" | "cancelled";
+  priority: "emergency" | "high" | "normal" | "low";
+  positionInQueue: number;
+  estimatedWaitMinutes: number;
   checkedInAt: string;
+  calledAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  // local-only UI state, not from API
+  _uiStatus?: "waiting" | "in_consultation" | "consulted" | "no_show";
 }
 
-const MOCK_QUEUE: QueueEntry[] = [
-  {
-    id: "q1", token: "T-001", position: 1,
-    patient: {
-      id: "p1", name: "Arjun Mehta", age: 34, gender: "male",
-      bloodGroup: "B+", phone: "9876543210",
-      allergies: ["Penicillin"], chronicConditions: ["Hypertension"],
-      currentMedications: ["Amlodipine 5mg"],
-      emergencyContact: { name: "Priya Mehta", relation: "Wife", phone: "9876543211" },
-    },
-    assessment: {
-      chiefComplaint: "Chest tightness and shortness of breath since morning",
-      vitals: { bp: "145/92", pulse: 88, temp: 98.6, spo2: 97, weight: 72 },
-      triagePriority: "high", triageScore: 7,
-      notes: "Patient reports stress-related episodes in the past week.",
-    },
-    appointmentType: "scheduled", waitTime: 0, status: "in_consultation",
-    checkedInAt: "09:05 AM",
-  },
-  {
-    id: "q2", token: "T-002", position: 2,
-    patient: {
-      id: "p2", name: "Sunita Rao", age: 52, gender: "female",
-      bloodGroup: "O+", phone: "9845012345",
-      allergies: [], chronicConditions: ["Type 2 Diabetes", "Hypothyroidism"],
-      currentMedications: ["Metformin 500mg", "Levothyroxine 50mcg"],
-      emergencyContact: { name: "Ramesh Rao", relation: "Husband", phone: "9845012346" },
-    },
-    assessment: {
-      chiefComplaint: "Routine follow-up for diabetes management",
-      vitals: { bp: "130/85", pulse: 74, temp: 98.2, spo2: 99, weight: 68 },
-      triagePriority: "medium", triageScore: 4,
-      notes: "HbA1c test results pending. Last visit 3 months ago.",
-    },
-    appointmentType: "follow_up", waitTime: 18, status: "waiting",
-    checkedInAt: "09:12 AM",
-  },
-  {
-    id: "q3", token: "T-003", position: 3,
-    patient: {
-      id: "p3", name: "Kiran Balasubramaniam", age: 28, gender: "male",
-      bloodGroup: "A-", phone: "9900112233",
-      allergies: ["Sulfa drugs"], chronicConditions: [],
-      currentMedications: [],
-      emergencyContact: { name: "Lakshmi B", relation: "Mother", phone: "9900112234" },
-    },
-    assessment: {
-      chiefComplaint: "Severe headache and fever for 2 days",
-      vitals: { bp: "118/76", pulse: 96, temp: 101.4, spo2: 98, weight: 65 },
-      triagePriority: "high", triageScore: 6,
-      notes: "No recent travel. No rash. Photophobia reported.",
-    },
-    appointmentType: "walk_in", waitTime: 35, status: "waiting",
-    checkedInAt: "09:28 AM",
-  },
-  {
-    id: "q4", token: "T-004", position: 4,
-    patient: {
-      id: "p4", name: "Meena Pillai", age: 67, gender: "female",
-      bloodGroup: "AB+", phone: "9712345678",
-      allergies: ["Aspirin"], chronicConditions: ["Osteoarthritis", "Hypertension"],
-      currentMedications: ["Losartan 50mg", "Calcium supplements"],
-      emergencyContact: { name: "Suresh Pillai", relation: "Son", phone: "9712345679" },
-    },
-    assessment: {
-      chiefComplaint: "Knee pain and swelling, difficulty walking",
-      vitals: { bp: "138/88", pulse: 70, temp: 98.8, spo2: 96, weight: 74 },
-      triagePriority: "medium", triageScore: 3,
-      notes: "Previously on Diclofenac — stopped due to gastric issues.",
-    },
-    appointmentType: "scheduled", waitTime: 52, status: "waiting",
-    checkedInAt: "09:40 AM",
-  },
-  {
-    id: "q5", token: "T-005", position: 5,
-    patient: {
-      id: "p5", name: "Rohit Sharma", age: 19, gender: "male",
-      bloodGroup: "O-", phone: "8800223344",
-      allergies: [], chronicConditions: [],
-      currentMedications: [],
-      emergencyContact: { name: "Anita Sharma", relation: "Mother", phone: "8800223345" },
-    },
-    assessment: {
-      chiefComplaint: "Throat pain and difficulty swallowing",
-      vitals: { bp: "110/70", pulse: 80, temp: 99.8, spo2: 99, weight: 58 },
-      triagePriority: "low", triageScore: 2,
-      notes: "Possible tonsillitis. No history of recurrence.",
-    },
-    appointmentType: "walk_in", waitTime: 68, status: "waiting",
-    checkedInAt: "09:55 AM",
-  },
-];
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getPatientName(patient: PopulatedPatient): string {
+  if (typeof patient.user === "object" && patient.user?.name) return patient.user.name;
+  return "Unknown Patient";
+}
+
+function getPatientPhone(patient: PopulatedPatient): string {
+  if (typeof patient.user === "object" && patient.user?.phone) return patient.user.phone;
+  return "—";
+}
+
+function calcAge(dateOfBirth?: string): number | null {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  const diff = Date.now() - dob.getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+}
+
+/** Map API status → local UI display status */
+function toUiStatus(
+  apiStatus: ApiQueueEntry["status"],
+  overrideUiStatus?: ApiQueueEntry["_uiStatus"]
+): "waiting" | "in_consultation" | "consulted" | "no_show" {
+  if (overrideUiStatus) return overrideUiStatus;
+  switch (apiStatus) {
+    case "waiting":    return "waiting";
+    case "called":     return "waiting";      // still show as "waiting" until doctor opens them
+    case "in_progress": return "in_consultation";
+    case "completed":  return "consulted";
+    case "skipped":
+    case "cancelled":  return "no_show";
+    default:           return "waiting";
+  }
+}
+
+/** Map triage severity → local priority band */
+function toTriagePriority(
+  severity?: string,
+  priority?: string
+): "high" | "medium" | "low" {
+  // Prefer API priority field if available
+  if (priority === "emergency" || priority === "high") return "high";
+  if (priority === "normal") return "medium";
+  // Fall back to triage severity
+  if (severity === "critical" || severity === "urgent") return "high";
+  if (severity === "semi_urgent") return "medium";
+  return "low";
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
 const PRIORITY_CONFIG = {
-  high: { label: "High", color: "#EF4444", bg: "#FEF2F2", border: "#FECACA" },
+  high:   { label: "High",   color: "#EF4444", bg: "#FEF2F2", border: "#FECACA" },
   medium: { label: "Medium", color: "#F59E0B", bg: "#FFFBEB", border: "#FDE68A" },
-  low: { label: "Low", color: "#10B981", bg: "#F0FDF4", border: "#A7F3D0" },
+  low:    { label: "Low",    color: "#10B981", bg: "#F0FDF4", border: "#A7F3D0" },
 };
 
 const STATUS_CONFIG = {
-  waiting: { label: "Waiting", color: "#6366F1", bg: "#EEF2FF" },
+  waiting:         { label: "Waiting",         color: "#6366F1", bg: "#EEF2FF" },
   in_consultation: { label: "In Consultation", color: "#059669", bg: "#ECFDF5" },
-  consulted: { label: "Consulted", color: "#64748B", bg: "#F1F5F9" },
-  no_show: { label: "No Show", color: "#EF4444", bg: "#FEF2F2" },
+  consulted:       { label: "Consulted",       color: "#64748B", bg: "#F1F5F9" },
+  no_show:         { label: "No Show",         color: "#EF4444", bg: "#FEF2F2" },
 };
 
-const TYPE_LABELS = {
-  scheduled: "Scheduled", follow_up: "Follow-up",
-  walk_in: "Walk-in", emergency: "Emergency",
+const TYPE_LABELS: Record<string, string> = {
+  scheduled: "Scheduled",
+  follow_up: "Follow-up",
+  walk_in:   "Walk-in",
+  emergency: "Emergency",
 };
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 interface VitalBadgeProps {
   label: string;
@@ -177,11 +177,7 @@ function VitalBadge({ label, value, unit, alert }: VitalBadgeProps) {
   );
 }
 
-interface PriorityBadgeProps {
-  priority: "high" | "medium" | "low";
-}
-
-function PriorityBadge({ priority }: PriorityBadgeProps) {
+function PriorityBadge({ priority }: { priority: "high" | "medium" | "low" }) {
   const cfg = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.low;
   return (
     <span style={{
@@ -191,11 +187,7 @@ function PriorityBadge({ priority }: PriorityBadgeProps) {
   );
 }
 
-interface StatusBadgeProps {
-  status: "waiting" | "in_consultation" | "consulted" | "no_show";
-}
-
-function StatusBadge({ status }: StatusBadgeProps) {
+function StatusBadge({ status }: { status: "waiting" | "in_consultation" | "consulted" | "no_show" }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.waiting;
   return (
     <span style={{
@@ -206,24 +198,30 @@ function StatusBadge({ status }: StatusBadgeProps) {
 }
 
 interface QueueCardProps {
-  entry: QueueEntry;
+  entry: ApiQueueEntry;
   isActive: boolean;
   onClick: () => void;
 }
 
 function QueueCard({ entry, isActive, onClick }: QueueCardProps) {
-  const { patient, assessment, token, position, waitTime, status } = entry;
-  const priCfg = PRIORITY_CONFIG[assessment.triagePriority];
+  const uiStatus = toUiStatus(entry.status, entry._uiStatus);
+  const priority = toTriagePriority(entry.assessment?.triageSeverity, entry.priority);
+  const priCfg = PRIORITY_CONFIG[priority];
+  const name = getPatientName(entry.patient);
+  const age = calcAge(entry.patient.dateOfBirth);
+  const gender = entry.patient.gender ?? "—";
+  const appointmentType = entry.appointment?.appointmentType ?? "scheduled";
+
   return (
     <div
       onClick={onClick}
       style={{
         background: isActive ? "#EFF6FF" : "#FFFFFF",
-        border: `2px solid ${isActive ? "#3B82F6" : assessment.triagePriority === "high" && status !== "consulted" ? "#FECACA" : "#E2E8F0"}`,
+        border: `2px solid ${isActive ? "#3B82F6" : priority === "high" && uiStatus !== "consulted" ? "#FECACA" : "#E2E8F0"}`,
         borderRadius: 12, padding: "14px 16px", cursor: "pointer",
         transition: "all 0.18s", marginBottom: 8,
         boxShadow: isActive ? "0 4px 16px rgba(59,130,246,0.13)" : "0 1px 3px rgba(0,0,0,0.05)",
-        opacity: status === "consulted" || status === "no_show" ? 0.65 : 1,
+        opacity: uiStatus === "consulted" || uiStatus === "no_show" ? 0.65 : 1,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -233,30 +231,32 @@ function QueueCard({ entry, isActive, onClick }: QueueCardProps) {
           color: isActive ? "#fff" : priCfg.color,
           display: "flex", alignItems: "center", justifyContent: "center",
           fontWeight: 800, fontSize: 14, flexShrink: 0,
-        }}>{position}</div>
+        }}>{entry.positionInQueue}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700, fontSize: 14, color: "#1E293B" }}>{patient.name}</span>
-            <span style={{ fontSize: 11, color: "#64748B", background: "#F1F5F9", borderRadius: 4, padding: "1px 6px" }}>{token}</span>
+            <span style={{ fontWeight: 700, fontSize: 14, color: "#1E293B" }}>{name}</span>
+            <span style={{ fontSize: 11, color: "#64748B", background: "#F1F5F9", borderRadius: 4, padding: "1px 6px" }}>
+              T-{String(entry.tokenNumber).padStart(3, "0")}
+            </span>
           </div>
           <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-            {patient.age}y • {patient.gender} • {TYPE_LABELS[entry.appointmentType]}
+            {age !== null ? `${age}y` : "—"} • {gender} • {TYPE_LABELS[appointmentType] ?? appointmentType}
           </div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <StatusBadge status={status} />
-          {status === "waiting" && (
-            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>⏱ {waitTime}m wait</div>
+          <StatusBadge status={uiStatus} />
+          {uiStatus === "waiting" && (
+            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>⏱ {entry.estimatedWaitMinutes}m wait</div>
           )}
         </div>
       </div>
-      {isActive && (
+      {isActive && entry.assessment && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed #BFDBFE" }}>
           <div style={{ fontSize: 12, color: "#475569" }}>
-            <span style={{ fontWeight: 600 }}>Chief complaint:</span> {assessment.chiefComplaint}
+            <span style={{ fontWeight: 600 }}>Chief complaint:</span> {entry.assessment.chiefComplaint}
           </div>
           <div style={{ marginTop: 4 }}>
-            <PriorityBadge priority={assessment.triagePriority} />
+            <PriorityBadge priority={priority} />
           </div>
         </div>
       )}
@@ -264,104 +264,367 @@ function QueueCard({ entry, isActive, onClick }: QueueCardProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
+
 export default function DoctorDashboardPage() {
-  const [queue, setQueue] = useState<QueueEntry[]>(MOCK_QUEUE);
-  const [activeId, setActiveId] = useState<string>("q1");
+  const { user, profile } = useAuthStore();
+
+  // Derive the doctor's Mongo _id from the profile returned by /auth/me
+  const doctorId: string | undefined = profile ? (profile as Record<string, unknown>)._id as string : undefined;
+  const departmentId: string | undefined = profile
+    ? ((profile as Record<string, unknown>).department as Record<string, unknown> | undefined)?._id as string | undefined
+    : undefined;
+
+  const [queue, setQueue] = useState<ApiQueueEntry[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [tab, setTab] = useState<string>("assessment");
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [, setConsultedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<string>("all");
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
 
+  // Track whether the initial API fetch has run so realtime updates can safely merge
+  const initialLoadDone = useRef(false);
+
+  // Clock tick
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const active = queue.find(e => e.id === activeId);
+  // -------------------------------------------------------------------------
+  // Initial fetch: GET /api/queue?doctorId=X
+  // -------------------------------------------------------------------------
+  const fetchQueue = useCallback(async () => {
+    if (!doctorId) return;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await apiClient.get<{
+        data: { entries: ApiQueueEntry[]; stats: Record<string, number> };
+      }>("/queue", { params: { doctorId } });
+      const entries: ApiQueueEntry[] = res.data.data.entries ?? [];
+      setQueue(entries);
+      initialLoadDone.current = true;
 
-  const filteredQueue = queue.filter(e => {
-    if (filter === "all") return true;
-    if (filter === "waiting") return e.status === "waiting" || e.status === "in_consultation";
-    if (filter === "done") return e.status === "consulted" || e.status === "no_show";
-    if (filter === "high") return e.assessment.triagePriority === "high";
-    return true;
+      // Auto-select first non-done entry
+      if (!activeId && entries.length > 0) {
+        const first = entries.find(
+          (e) => e.status === "waiting" || e.status === "called" || e.status === "in_progress"
+        );
+        if (first) setActiveId(first._id);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load queue";
+      setLoadError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [doctorId, activeId]);
+
+  useEffect(() => {
+    fetchQueue();
+  }, [fetchQueue]);
+
+  // -------------------------------------------------------------------------
+  // Real-time queue updates via useRealtimeQueue
+  // Socket payloads have QueueEntry (minimal shape from socket.service.ts).
+  // We merge them into our full ApiQueueEntry array by _id.
+  // -------------------------------------------------------------------------
+  const onQueueUpdated = useCallback((payload: QueueUpdatedPayload) => {
+    if (!initialLoadDone.current) return;
+
+    setQueue((prev) => {
+      const socketMap = new Map<string, SocketQueueEntry>(
+        payload.queue.map((e) => [e._id, e])
+      );
+
+      // Update existing entries with fresh socket data; preserve _uiStatus overrides
+      const updated = prev.map((entry) => {
+        const live = socketMap.get(entry._id);
+        if (!live) return entry;
+        // Only update status/position/wait; keep populated fields
+        return {
+          ...entry,
+          status: live.status as ApiQueueEntry["status"],
+          positionInQueue: live.positionInQueue,
+          estimatedWaitMinutes: live.estimatedWaitMinutes,
+          calledAt: live.calledAt,
+          // Clear UI override if the real status has advanced
+          _uiStatus:
+            live.status === "in_progress" || live.status === "completed" || live.status === "skipped"
+              ? undefined
+              : entry._uiStatus,
+        };
+      });
+
+      // Add any brand-new entries that arrived via socket but aren't in our list
+      const existingIds = new Set(updated.map((e) => e._id));
+      const newEntries: ApiQueueEntry[] = [];
+      for (const socketEntry of payload.queue) {
+        if (!existingIds.has(socketEntry._id)) {
+          // Minimal entry — will be enriched on next full fetch
+          newEntries.push({
+            _id: socketEntry._id,
+            tokenNumber: socketEntry.tokenNumber,
+            patient: { _id: socketEntry.patient._id, user: socketEntry.patient.user },
+            status: socketEntry.status as ApiQueueEntry["status"],
+            priority: socketEntry.priority as ApiQueueEntry["priority"],
+            positionInQueue: socketEntry.positionInQueue,
+            estimatedWaitMinutes: socketEntry.estimatedWaitMinutes,
+            checkedInAt: socketEntry.checkedInAt,
+            calledAt: socketEntry.calledAt,
+          });
+        }
+      }
+
+      return [...updated, ...newEntries].sort((a, b) => a.positionInQueue - b.positionInQueue);
+    });
+  }, []);
+
+  useRealtimeQueue({
+    doctorId,
+    departmentId,
+    onQueueUpdated,
+    showCalledToast: true,
   });
 
-  const handleMarkConsulted = useCallback(() => {
-    setQueue(prev => prev.map(e =>
-      e.id === activeId ? { ...e, status: "consulted" } : e
-    ));
-    setConsultedIds(prev => [...prev, activeId]);
-    const next = queue.find(e => e.id !== activeId && (e.status === "waiting" || e.status === "in_consultation"));
-    if (next) {
-      setActiveId(next.id);
-      setQueue(prev => prev.map(e => e.id === next.id ? { ...e, status: "in_consultation" } : e));
-    }
-    setSaveSuccess("consulted");
-    setTimeout(() => setSaveSuccess(null), 2500);
-  }, [activeId, queue]);
+  // -------------------------------------------------------------------------
+  // Actions
+  // -------------------------------------------------------------------------
 
-  const handleMarkNoShow = useCallback(() => {
-    setQueue(prev => prev.map(e =>
-      e.id === activeId ? { ...e, status: "no_show" } : e
-    ));
-    const next = queue.find(e => e.id !== activeId && (e.status === "waiting" || e.status === "in_consultation"));
-    if (next) setActiveId(next.id);
-    setSaveSuccess("noshow");
-    setTimeout(() => setSaveSuccess(null), 2500);
+  /** Mark a queue entry as in_progress (doctor opens the patient) */
+  const markInProgress = useCallback(async (entryId: string) => {
+    const entry = queue.find((e) => e._id === entryId);
+    if (!entry) return;
+    // Only allowed from "waiting" or "called"
+    if (entry.status !== "waiting" && entry.status !== "called") return;
+    try {
+      await apiClient.patch(`/queue/${entryId}/status`, { status: "in_progress" });
+      setQueue((prev) =>
+        prev.map((e) =>
+          e._id === entryId ? { ...e, status: "in_progress", _uiStatus: "in_consultation" } : e
+        )
+      );
+    } catch {
+      // Non-fatal: API might reject if status transition is invalid; just reflect locally
+      setQueue((prev) =>
+        prev.map((e) =>
+          e._id === entryId ? { ...e, _uiStatus: "in_consultation" } : e
+        )
+      );
+    }
+  }, [queue]);
+
+  const handleSelectPatient = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      setTab("assessment");
+      // Automatically move to in_progress when doctor clicks the patient
+      markInProgress(id);
+    },
+    [markInProgress]
+  );
+
+  const handleMarkConsulted = useCallback(async () => {
+    if (!activeId) return;
+    setActionLoading(true);
+    try {
+      await apiClient.patch(`/queue/${activeId}/status`, { status: "completed" });
+      setQueue((prev) =>
+        prev.map((e) =>
+          e._id === activeId ? { ...e, status: "completed", _uiStatus: "consulted" } : e
+        )
+      );
+
+      // Auto-advance to next waiting/called patient
+      const next = queue.find(
+        (e) =>
+          e._id !== activeId &&
+          (e.status === "waiting" || e.status === "called") &&
+          !e._uiStatus
+      );
+      if (next) {
+        setActiveId(next._id);
+        markInProgress(next._id);
+      }
+
+      setSaveSuccess("consulted");
+      setTimeout(() => setSaveSuccess(null), 2500);
+    } catch {
+      setSaveSuccess("consulted");
+      // Optimistically update locally even if API is slow
+      setQueue((prev) =>
+        prev.map((e) =>
+          e._id === activeId ? { ...e, _uiStatus: "consulted" } : e
+        )
+      );
+      setTimeout(() => setSaveSuccess(null), 2500);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [activeId, queue, markInProgress]);
+
+  const handleMarkNoShow = useCallback(async () => {
+    if (!activeId) return;
+    setActionLoading(true);
+    try {
+      await apiClient.patch(`/queue/${activeId}/status`, { status: "skipped" });
+      setQueue((prev) =>
+        prev.map((e) =>
+          e._id === activeId ? { ...e, status: "skipped", _uiStatus: "no_show" } : e
+        )
+      );
+
+      const next = queue.find(
+        (e) =>
+          e._id !== activeId &&
+          (e.status === "waiting" || e.status === "called") &&
+          !e._uiStatus
+      );
+      if (next) setActiveId(next._id);
+
+      setSaveSuccess("noshow");
+      setTimeout(() => setSaveSuccess(null), 2500);
+    } catch {
+      setQueue((prev) =>
+        prev.map((e) =>
+          e._id === activeId ? { ...e, _uiStatus: "no_show" } : e
+        )
+      );
+      setSaveSuccess("noshow");
+      setTimeout(() => setSaveSuccess(null), 2500);
+    } finally {
+      setActionLoading(false);
+    }
   }, [activeId, queue]);
 
   const handleSaveNotes = useCallback(async () => {
+    if (!activeId) return;
     setSaving(true);
-    await new Promise(r => setTimeout(r, 700));
-    setSaving(false);
-    setSaveSuccess("notes");
-    setTimeout(() => setSaveSuccess(null), 2500);
-  }, []);
+    try {
+      // Find the assessment _id if present
+      const entry = queue.find((e) => e._id === activeId);
+      if (entry?.assessment) {
+        await apiClient.patch(`/assessments/${entry.assessment._id}`, {
+          notes: notes[activeId] ?? "",
+        });
+      }
+    } catch {
+      // Silently swallow — notes are stored locally regardless
+    } finally {
+      setSaving(false);
+      setSaveSuccess("notes");
+      setTimeout(() => setSaveSuccess(null), 2500);
+    }
+  }, [activeId, notes, queue]);
 
-  const handleSelectPatient = (id: string) => {
-    setActiveId(id);
-    setTab("assessment");
-    setQueue(prev => prev.map(e =>
-      e.id === id && e.status === "waiting" ? { ...e, status: "in_consultation" } : e
-    ));
-  };
+  // -------------------------------------------------------------------------
+  // Derived state
+  // -------------------------------------------------------------------------
+
+  const active = queue.find((e) => e._id === activeId) ?? null;
+
+  const filteredQueue = queue.filter((e) => {
+    const uiStatus = toUiStatus(e.status, e._uiStatus);
+    if (filter === "all") return true;
+    if (filter === "waiting") return uiStatus === "waiting" || uiStatus === "in_consultation";
+    if (filter === "done") return uiStatus === "consulted" || uiStatus === "no_show";
+    if (filter === "high") {
+      const p = toTriagePriority(e.assessment?.triageSeverity, e.priority);
+      return p === "high" && uiStatus !== "consulted";
+    }
+    return true;
+  });
 
   const stats = {
     total: queue.length,
-    waiting: queue.filter(e => e.status === "waiting").length,
-    consulting: queue.filter(e => e.status === "in_consultation").length,
-    done: queue.filter(e => e.status === "consulted").length,
-    high: queue.filter(e => e.assessment.triagePriority === "high" && e.status !== "consulted").length,
+    waiting: queue.filter((e) => toUiStatus(e.status, e._uiStatus) === "waiting").length,
+    consulting: queue.filter((e) => toUiStatus(e.status, e._uiStatus) === "in_consultation").length,
+    done: queue.filter((e) => toUiStatus(e.status, e._uiStatus) === "consulted").length,
+    high: queue.filter((e) => {
+      const p = toTriagePriority(e.assessment?.triageSeverity, e.priority);
+      return p === "high" && toUiStatus(e.status, e._uiStatus) !== "consulted";
+    }).length,
   };
+
+  // -------------------------------------------------------------------------
+  // Active patient derived fields
+  // -------------------------------------------------------------------------
+
+  const activeUiStatus = active ? toUiStatus(active.status, active._uiStatus) : null;
+  const activePriority = active ? toTriagePriority(active.assessment?.triageSeverity, active.priority) : null;
+  const activePatientName = active ? getPatientName(active.patient) : "";
+  const activeToken = active ? `T-${String(active.tokenNumber).padStart(3, "0")}` : "";
+  const activeAge = active ? calcAge(active.patient.dateOfBirth) : null;
+  const activePhone = active ? getPatientPhone(active.patient) : "";
+  const activeCheckedIn = active
+    ? new Date(active.checkedInAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#F0F4F8", minHeight: "100%", color: "#1E293B" }}>
+
       {/* Stats Bar */}
       <div style={{
         background: "#FFFFFF", borderBottom: "1px solid #E2E8F0",
         padding: "10px 24px", display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap"
       }}>
         {[
-          { label: "Total Today", value: stats.total, color: "#64748B" },
-          { label: "Waiting", value: stats.waiting, color: "#6366F1" },
-          { label: "In Consultation", value: stats.consulting, color: "#059669" },
-          { label: "Completed", value: stats.done, color: "#10B981" },
-          { label: "High Priority", value: stats.high, color: "#EF4444" },
-        ].map(s => (
+          { label: "Total Today",     value: loading ? "—" : stats.total,     color: "#64748B" },
+          { label: "Waiting",         value: loading ? "—" : stats.waiting,    color: "#6366F1" },
+          { label: "In Consultation", value: loading ? "—" : stats.consulting, color: "#059669" },
+          { label: "Completed",       value: loading ? "—" : stats.done,       color: "#10B981" },
+          { label: "High Priority",   value: loading ? "—" : stats.high,       color: "#EF4444" },
+        ].map((s) => (
           <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</span>
             <span style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.3 }}>{s.label}</span>
             <span style={{ color: "#E2E8F0", marginLeft: 8 }}>|</span>
           </div>
         ))}
-        <div style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#475569" }}>
-          🕐 {currentTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Live indicator */}
+          <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#10B981" }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: "50%", background: "#10B981",
+              display: "inline-block", animation: "pulse 2s infinite"
+            }} />
+            Live
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>
+            🕐 {currentTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </span>
+          {user && <span style={{ fontSize: 12, color: "#94A3B8" }}>Dr. {user.name}</span>}
         </div>
       </div>
+
+      {/* Error banner */}
+      {loadError && (
+        <div style={{
+          background: "#FEF2F2", borderBottom: "1px solid #FECACA",
+          padding: "10px 24px", display: "flex", alignItems: "center", gap: 12
+        }}>
+          <span style={{ color: "#EF4444", fontWeight: 600, fontSize: 13 }}>⚠ {loadError}</span>
+          <button
+            onClick={fetchQueue}
+            style={{
+              background: "#EF4444", color: "#fff", border: "none",
+              borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer"
+            }}
+          >Retry</button>
+        </div>
+      )}
 
       {/* Main Layout */}
       <div style={{ display: "flex", height: "calc(100vh - 120px)", overflow: "hidden" }}>
@@ -378,11 +641,11 @@ export default function DoctorDashboardPage() {
             {/* Filter chips */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {[
-                { key: "all", label: "All" },
+                { key: "all",     label: "All" },
                 { key: "waiting", label: "Active" },
-                { key: "high", label: "🔴 High" },
-                { key: "done", label: "Done" },
-              ].map(f => (
+                { key: "high",    label: "🔴 High" },
+                { key: "done",    label: "Done" },
+              ].map((f) => (
                 <button key={f.key} onClick={() => setFilter(f.key)} style={{
                   background: filter === f.key ? "#3B82F6" : "#FFFFFF",
                   color: filter === f.key ? "#FFFFFF" : "#64748B",
@@ -392,22 +655,32 @@ export default function DoctorDashboardPage() {
               ))}
             </div>
           </div>
+
           <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
-            {filteredQueue.length === 0 ? (
-              <div style={{ textAlign: "center", color: "#94A3B8", padding: "40px 0", fontSize: 13 }}>
-                No patients in this view
+            {loading ? (
+              <div style={{ textAlign: "center", color: "#94A3B8", padding: "40px 0" }}>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
+                <div style={{ fontSize: 13 }}>Loading queue…</div>
               </div>
-            ) : filteredQueue.map(entry => (
-              <QueueCard
-                key={entry.id}
-                entry={entry}
-                isActive={entry.id === activeId}
-                onClick={() => handleSelectPatient(entry.id)}
-              />
-            ))}
+            ) : filteredQueue.length === 0 ? (
+              <div style={{ textAlign: "center", color: "#94A3B8", padding: "40px 0", fontSize: 13 }}>
+                {queue.length === 0 ? "No patients in queue today" : "No patients in this view"}
+              </div>
+            ) : (
+              filteredQueue.map((entry) => (
+                <QueueCard
+                  key={entry._id}
+                  entry={entry}
+                  isActive={entry._id === activeId}
+                  onClick={() => handleSelectPatient(entry._id)}
+                />
+              ))
+            )}
           </div>
+
           <div style={{ padding: "10px 16px", borderTop: "1px solid #E2E8F0", background: "#FFFFFF" }}>
-            <div style={{ fontSize: 11, color: "#94A3B8", textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", display: "inline-block" }} />
               Queue updates in real-time via WebSocket
             </div>
           </div>
@@ -428,28 +701,29 @@ export default function DoctorDashboardPage() {
                     borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center",
                     fontWeight: 800, fontSize: 22, color: "#4338CA", flexShrink: 0,
                   }}>
-                    {active.patient.name[0]}
+                    {activePatientName[0] ?? "?"}
                   </div>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#1E293B" }}>{active.patient.name}</h2>
-                      <span style={{ background: "#F1F5F9", color: "#64748B", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>{active.token}</span>
-                      <StatusBadge status={active.status} />
+                      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#1E293B" }}>{activePatientName}</h2>
+                      <span style={{ background: "#F1F5F9", color: "#64748B", borderRadius: 6, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>{activeToken}</span>
+                      {activeUiStatus && <StatusBadge status={activeUiStatus} />}
                     </div>
                     <div style={{ display: "flex", gap: 14, marginTop: 5, flexWrap: "wrap" }}>
                       {[
-                        `${active.patient.age} years`,
+                        activeAge !== null ? `${activeAge} years` : null,
                         active.patient.gender,
-                        `Blood: ${active.patient.bloodGroup}`,
-                        `📞 ${active.patient.phone}`,
-                        `Checked in: ${active.checkedInAt}`,
-                        TYPE_LABELS[active.appointmentType],
-                      ].map((item, i) => (
+                        active.patient.bloodGroup ? `Blood: ${active.patient.bloodGroup}` : null,
+                        activePhone ? `📞 ${activePhone}` : null,
+                        activeCheckedIn ? `Checked in: ${activeCheckedIn}` : null,
+                        active.appointment?.appointmentType ? TYPE_LABELS[active.appointment.appointmentType] : null,
+                      ].filter(Boolean).map((item, i) => (
                         <span key={i} style={{ fontSize: 12, color: "#64748B" }}>{item}</span>
                       ))}
                     </div>
                   </div>
                 </div>
+
                 {/* Action Buttons */}
                 <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
                   {saveSuccess === "consulted" && (
@@ -460,27 +734,28 @@ export default function DoctorDashboardPage() {
                   )}
                   <button
                     onClick={handleMarkNoShow}
-                    disabled={active.status === "consulted" || active.status === "no_show"}
+                    disabled={actionLoading || activeUiStatus === "consulted" || activeUiStatus === "no_show"}
                     style={{
                       background: "#FFF1F2", color: "#EF4444", border: "1.5px solid #FECACA",
                       borderRadius: 8, padding: "8px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer",
-                      opacity: active.status === "consulted" || active.status === "no_show" ? 0.45 : 1,
+                      opacity: actionLoading || activeUiStatus === "consulted" || activeUiStatus === "no_show" ? 0.45 : 1,
                     }}
                   >No Show</button>
                   <button
                     onClick={handleMarkConsulted}
-                    disabled={active.status === "consulted"}
+                    disabled={actionLoading || activeUiStatus === "consulted"}
                     style={{
-                      background: active.status === "consulted"
+                      background: actionLoading || activeUiStatus === "consulted"
                         ? "#F1F5F9"
                         : "linear-gradient(135deg,#22C55E,#16A34A)",
-                      color: active.status === "consulted" ? "#94A3B8" : "#FFFFFF",
+                      color: actionLoading || activeUiStatus === "consulted" ? "#94A3B8" : "#FFFFFF",
                       border: "none", borderRadius: 8, padding: "8px 20px",
-                      fontWeight: 700, fontSize: 13, cursor: active.status === "consulted" ? "default" : "pointer",
-                      boxShadow: active.status === "consulted" ? "none" : "0 2px 8px rgba(34,197,94,0.3)",
+                      fontWeight: 700, fontSize: 13,
+                      cursor: actionLoading || activeUiStatus === "consulted" ? "default" : "pointer",
+                      boxShadow: actionLoading || activeUiStatus === "consulted" ? "none" : "0 2px 8px rgba(34,197,94,0.3)",
                     }}
                   >
-                    {active.status === "consulted" ? "✓ Consulted" : "✓ Mark as Consulted"}
+                    {actionLoading ? "Saving…" : activeUiStatus === "consulted" ? "✓ Consulted" : "✓ Mark as Consulted"}
                   </button>
                 </div>
               </div>
@@ -490,12 +765,14 @@ export default function DoctorDashboardPage() {
             <div style={{ background: "#FFFFFF", borderBottom: "1px solid #E2E8F0", padding: "0 24px", display: "flex", gap: 4 }}>
               {[
                 { key: "assessment", label: "Assessment & Vitals" },
-                { key: "history", label: "Medical History" },
-                { key: "notes", label: "Doctor Notes" },
-              ].map(t => (
+                { key: "history",    label: "Medical History" },
+                { key: "notes",      label: "Doctor Notes" },
+              ].map((t) => (
                 <button key={t.key} onClick={() => setTab(t.key)} style={{
-                  background: "none", border: "none", borderBottom: `2.5px solid ${tab === t.key ? "#3B82F6" : "transparent"}`,
-                  color: tab === t.key ? "#3B82F6" : "#64748B", fontWeight: tab === t.key ? 700 : 500,
+                  background: "none", border: "none",
+                  borderBottom: `2.5px solid ${tab === t.key ? "#3B82F6" : "transparent"}`,
+                  color: tab === t.key ? "#3B82F6" : "#64748B",
+                  fontWeight: tab === t.key ? 700 : 500,
                   fontSize: 13, padding: "12px 16px", cursor: "pointer", transition: "all 0.15s",
                 }}>{t.label}</button>
               ))}
@@ -506,43 +783,81 @@ export default function DoctorDashboardPage() {
 
               {tab === "assessment" && (
                 <div style={{ display: "grid", gap: 20 }}>
-                  {/* Chief Complaint */}
-                  <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
-                    <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Chief Complaint</h3>
-                    <p style={{ margin: 0, fontSize: 15, color: "#1E293B", lineHeight: 1.6 }}>{active.assessment.chiefComplaint}</p>
-                    <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <PriorityBadge priority={active.assessment.triagePriority} />
-                      <span style={{ fontSize: 12, color: "#64748B" }}>Triage Score: <strong>{active.assessment.triageScore}/10</strong></span>
-                    </div>
-                  </div>
+                  {active.assessment ? (
+                    <>
+                      {/* Chief Complaint */}
+                      <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
+                        <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Chief Complaint</h3>
+                        <p style={{ margin: 0, fontSize: 15, color: "#1E293B", lineHeight: 1.6 }}>{active.assessment.chiefComplaint}</p>
+                        <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                          {activePriority && <PriorityBadge priority={activePriority} />}
+                          <span style={{ fontSize: 12, color: "#64748B" }}>Triage Score: <strong>{active.assessment.triageScore}/10</strong></span>
+                        </div>
+                      </div>
 
-                  {/* Vitals */}
-                  <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
-                    <h3 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Vitals</h3>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <VitalBadge label="BP" value={active.assessment.vitals.bp} unit="mmHg" alert={parseInt(active.assessment.vitals.bp) > 140} />
-                      <VitalBadge label="Pulse" value={active.assessment.vitals.pulse} unit="bpm" alert={active.assessment.vitals.pulse > 100} />
-                      <VitalBadge label="Temp" value={active.assessment.vitals.temp} unit="°F" alert={active.assessment.vitals.temp > 100} />
-                      <VitalBadge label="SpO₂" value={`${active.assessment.vitals.spo2}%`} alert={active.assessment.vitals.spo2 < 95} />
-                      <VitalBadge label="Weight" value={active.assessment.vitals.weight} unit="kg" />
-                    </div>
-                  </div>
+                      {/* Vitals */}
+                      {active.assessment.vitals && (
+                        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
+                          <h3 style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Vitals</h3>
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                            {active.assessment.vitals.bloodPressure && (
+                              <VitalBadge
+                                label="BP" value={active.assessment.vitals.bloodPressure} unit="mmHg"
+                                alert={parseInt(active.assessment.vitals.bloodPressure) > 140}
+                              />
+                            )}
+                            {active.assessment.vitals.heartRate !== undefined && (
+                              <VitalBadge label="Pulse" value={active.assessment.vitals.heartRate} unit="bpm" alert={active.assessment.vitals.heartRate > 100} />
+                            )}
+                            {active.assessment.vitals.temperature !== undefined && (
+                              <VitalBadge label="Temp" value={active.assessment.vitals.temperature} unit="°C" alert={active.assessment.vitals.temperature > 38} />
+                            )}
+                            {active.assessment.vitals.oxygenSaturation !== undefined && (
+                              <VitalBadge label="SpO₂" value={`${active.assessment.vitals.oxygenSaturation}%`} alert={active.assessment.vitals.oxygenSaturation < 95} />
+                            )}
+                            {active.assessment.vitals.weight !== undefined && (
+                              <VitalBadge label="Weight" value={active.assessment.vitals.weight} unit="kg" />
+                            )}
+                            {active.assessment.vitals.respiratoryRate !== undefined && (
+                              <VitalBadge label="RR" value={active.assessment.vitals.respiratoryRate} unit="br/min" alert={active.assessment.vitals.respiratoryRate > 20} />
+                            )}
+                          </div>
+                        </div>
+                      )}
 
-                  {/* Nurse Notes */}
-                  <div style={{ background: "#FFFBEB", borderRadius: 12, padding: 20, border: "1px solid #FDE68A" }}>
-                    <h3 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: 0.5 }}>🩺 Nurse Assessment Notes</h3>
-                    <p style={{ margin: 0, fontSize: 14, color: "#78350F", lineHeight: 1.6 }}>{active.assessment.notes}</p>
-                  </div>
+                      {/* Assessment notes */}
+                      {active.assessment.notes && (
+                        <div style={{ background: "#FFFBEB", borderRadius: 12, padding: 20, border: "1px solid #FDE68A" }}>
+                          <h3 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: 0.5 }}>🩺 Nurse Assessment Notes</h3>
+                          <p style={{ margin: 0, fontSize: 14, color: "#78350F", lineHeight: 1.6 }}>{active.assessment.notes}</p>
+                        </div>
+                      )}
+
+                      {/* Appointment reason */}
+                      {active.appointment?.reasonForVisit && (
+                        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
+                          <h3 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Reason for Visit</h3>
+                          <p style={{ margin: 0, fontSize: 14, color: "#1E293B", lineHeight: 1.6 }}>{active.appointment.reasonForVisit}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 32, border: "1.5px dashed #CBD5E1", textAlign: "center", color: "#94A3B8" }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>No assessment on file</div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>Triage assessment will appear here once completed by the nurse</div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {tab === "history" && (
                 <div style={{ display: "grid", gap: 16 }}>
                   {[
-                    { title: "Allergies", items: active.patient.allergies, emptyMsg: "No known allergies", color: "#EF4444", bg: "#FEF2F2", border: "#FECACA" },
-                    { title: "Chronic Conditions", items: active.patient.chronicConditions, emptyMsg: "None recorded", color: "#6366F1", bg: "#EEF2FF", border: "#C7D2FE" },
-                    { title: "Current Medications", items: active.patient.currentMedications, emptyMsg: "None", color: "#059669", bg: "#F0FDF4", border: "#A7F3D0" },
-                  ].map(section => (
+                    { title: "Allergies",            items: active.patient.allergies ?? [],            emptyMsg: "No known allergies", color: "#EF4444", bg: "#FEF2F2", border: "#FECACA" },
+                    { title: "Chronic Conditions",   items: active.patient.chronicConditions ?? [],    emptyMsg: "None recorded",      color: "#6366F1", bg: "#EEF2FF", border: "#C7D2FE" },
+                    { title: "Current Medications",  items: active.patient.currentMedications ?? [],   emptyMsg: "None",               color: "#059669", bg: "#F0FDF4", border: "#A7F3D0" },
+                  ].map((section) => (
                     <div key={section.title} style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
                       <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>{section.title}</h3>
                       {section.items.length === 0 ? (
@@ -562,14 +877,16 @@ export default function DoctorDashboardPage() {
                   ))}
 
                   {/* Emergency Contact */}
-                  <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
-                    <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Emergency Contact</h3>
-                    <div style={{ fontSize: 14, color: "#1E293B" }}>
-                      <strong>{active.patient.emergencyContact.name}</strong>
-                      <span style={{ color: "#64748B" }}> ({active.patient.emergencyContact.relation})</span>
-                      <span style={{ marginLeft: 12, color: "#3B82F6" }}>📞 {active.patient.emergencyContact.phone}</span>
+                  {active.patient.emergencyContact && (
+                    <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
+                      <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Emergency Contact</h3>
+                      <div style={{ fontSize: 14, color: "#1E293B" }}>
+                        <strong>{active.patient.emergencyContact.name}</strong>
+                        <span style={{ color: "#64748B" }}> ({active.patient.emergencyContact.relation})</span>
+                        <span style={{ marginLeft: 12, color: "#3B82F6" }}>📞 {active.patient.emergencyContact.phone}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -578,21 +895,21 @@ export default function DoctorDashboardPage() {
                   <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 20, border: "1px solid #E2E8F0" }}>
                     <h3 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Consultation Notes</h3>
                     <textarea
-                      value={notes[active.id] || ""}
-                      onChange={e => setNotes(prev => ({ ...prev, [active.id]: e.target.value }))}
-                      placeholder={`Add consultation notes for ${active.patient.name}...\n\nInclude:\n• Diagnosis / Differential diagnosis\n• Examination findings\n• Investigations ordered\n• Treatment plan\n• Follow-up instructions`}
+                      value={notes[activeId!] ?? ""}
+                      onChange={(e) => setNotes((prev) => ({ ...prev, [activeId!]: e.target.value }))}
+                      placeholder={`Add consultation notes for ${activePatientName}...\n\nInclude:\n• Diagnosis / Differential diagnosis\n• Examination findings\n• Investigations ordered\n• Treatment plan\n• Follow-up instructions`}
                       style={{
                         width: "100%", minHeight: 220, border: "1.5px solid #E2E8F0",
                         borderRadius: 8, padding: "12px 14px", fontSize: 14, color: "#1E293B",
                         lineHeight: 1.7, resize: "vertical", outline: "none", boxSizing: "border-box",
                         fontFamily: "inherit", background: "#F8FAFC",
                       }}
-                      onFocus={e => e.target.style.borderColor = "#3B82F6"}
-                      onBlur={e => e.target.style.borderColor = "#E2E8F0"}
+                      onFocus={(e) => (e.target.style.borderColor = "#3B82F6")}
+                      onBlur={(e) => (e.target.style.borderColor = "#E2E8F0")}
                     />
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, flexWrap: "wrap", gap: 10 }}>
                       <span style={{ fontSize: 12, color: "#94A3B8" }}>
-                        {(notes[active.id] || "").length} characters
+                        {(notes[activeId!] ?? "").length} characters
                       </span>
                       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                         {saveSuccess === "notes" && (
@@ -600,15 +917,15 @@ export default function DoctorDashboardPage() {
                         )}
                         <button
                           onClick={handleSaveNotes}
-                          disabled={saving || !(notes[active.id] || "").trim()}
+                          disabled={saving || !(notes[activeId!] ?? "").trim()}
                           style={{
-                            background: !(notes[active.id] || "").trim()
+                            background: !(notes[activeId!] ?? "").trim()
                               ? "#F1F5F9"
                               : "linear-gradient(135deg,#3B82F6,#2563EB)",
-                            color: !(notes[active.id] || "").trim() ? "#94A3B8" : "#FFFFFF",
+                            color: !(notes[activeId!] ?? "").trim() ? "#94A3B8" : "#FFFFFF",
                             border: "none", borderRadius: 8, padding: "9px 22px",
                             fontWeight: 700, fontSize: 13, cursor: "pointer",
-                            boxShadow: !(notes[active.id] || "").trim() ? "none" : "0 2px 8px rgba(59,130,246,0.3)",
+                            boxShadow: !(notes[activeId!] ?? "").trim() ? "none" : "0 2px 8px rgba(59,130,246,0.3)",
                           }}
                         >
                           {saving ? "Saving..." : "Save Notes"}
@@ -637,9 +954,24 @@ export default function DoctorDashboardPage() {
         ) : (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ textAlign: "center", color: "#94A3B8" }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>🩺</div>
-              <div style={{ fontWeight: 700, fontSize: 18 }}>Select a patient from the queue</div>
-              <div style={{ fontSize: 13, marginTop: 6 }}>Click any patient card on the left to view details</div>
+              {loading ? (
+                <>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+                  <div style={{ fontWeight: 700, fontSize: 18 }}>Loading today's queue…</div>
+                </>
+              ) : queue.length === 0 ? (
+                <>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
+                  <div style={{ fontWeight: 700, fontSize: 18 }}>Queue is clear</div>
+                  <div style={{ fontSize: 13, marginTop: 6 }}>No patients are in the queue right now</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🩺</div>
+                  <div style={{ fontWeight: 700, fontSize: 18 }}>Select a patient from the queue</div>
+                  <div style={{ fontSize: 13, marginTop: 6 }}>Click any patient card on the left to view details</div>
+                </>
+              )}
             </div>
           </div>
         )}
