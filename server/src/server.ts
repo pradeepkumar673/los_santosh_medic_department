@@ -1,8 +1,11 @@
 import http from "http";
+import dns from "dns";
 import app from "./app";
 import { env } from "./config/env";
 import { connectDB, disconnectDB } from "./config/db";
 import { initSocket } from "./config/socket";
+
+dns.setDefaultResultOrder("ipv4first");
 
 const httpServer = http.createServer(app);
 
