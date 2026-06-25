@@ -4,7 +4,7 @@ import Topbar from "../components/layout/Topbar";
 
 export default function MainLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar />

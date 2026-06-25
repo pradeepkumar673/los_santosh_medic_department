@@ -1,4 +1,4 @@
-import { Menu, Bell, ChevronDown } from "lucide-react";
+import { Menu, Bell, ChevronDown, Sun, Moon } from "lucide-react";
 import { useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { useUIStore } from "../../store/uiStore";
@@ -6,26 +6,34 @@ import { ROLE_LABELS } from "../../config/sidebarConfig";
 
 export default function Topbar() {
   const user = useAuthStore((s) => s.user);
-  const { toggleSidebar, notifications, unreadCount, markAllRead } = useUIStore();
+  const { toggleSidebar, notifications, unreadCount, markAllRead, theme, toggleTheme } = useUIStore();
   const [showNotifications, setShowNotifications] = useState(false);
 
   if (!user) return null;
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6">
-      <button onClick={toggleSidebar} className="text-slate-500 lg:hidden">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-800 sm:px-6">
+      <button onClick={toggleSidebar} className="text-slate-500 dark:text-slate-300 lg:hidden">
         <Menu className="h-6 w-6" />
       </button>
       <div className="hidden lg:block" />
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
+        <button
+          onClick={toggleTheme}
+          aria-label="Toggle dark mode"
+          className="rounded-full p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+        >
+          {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
+
         <div className="relative">
           <button
             onClick={() => {
               setShowNotifications((v) => !v);
               if (!showNotifications) markAllRead();
             }}
-            className="relative rounded-full p-2 text-slate-500 hover:bg-slate-100"
+            className="relative rounded-full p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <Bell className="h-5 w-5" />
             {unreadCount > 0 && (
@@ -36,16 +44,16 @@ export default function Topbar() {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-lg">
-              <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Notifications</div>
+            <div className="absolute right-0 mt-2 w-72 max-w-[90vw] rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 sm:w-80">
+              <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200">Notifications</div>
               <div className="max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
                   <p className="px-4 py-6 text-center text-sm text-slate-400">You're all caught up.</p>
                 ) : (
                   notifications.map((n) => (
-                    <div key={n.id} className="border-b border-slate-50 px-4 py-3 text-sm">
-                      <p className="font-medium text-slate-700">{n.title}</p>
-                      <p className="text-slate-500">{n.message}</p>
+                    <div key={n.id} className="border-b border-slate-50 px-4 py-3 text-sm dark:border-slate-700">
+                      <p className="font-medium text-slate-700 dark:text-slate-200">{n.title}</p>
+                      <p className="text-slate-500 dark:text-slate-400">{n.message}</p>
                     </div>
                   ))
                 )}
@@ -59,7 +67,7 @@ export default function Topbar() {
             {user.name.charAt(0).toUpperCase()}
           </div>
           <div className="hidden text-sm sm:block">
-            <p className="font-medium text-slate-700">{user.name}</p>
+            <p className="font-medium text-slate-700 dark:text-slate-200">{user.name}</p>
             <p className="text-xs text-slate-400">{ROLE_LABELS[user.role]}</p>
           </div>
           <ChevronDown className="hidden h-4 w-4 text-slate-400 sm:block" />
