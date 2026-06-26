@@ -49,14 +49,15 @@ const globalLimiter = rateLimit({
 });
 app.use("/api", globalLimiter);
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: "Too many auth attempts, please try again later." },
-});
-app.use("/api/auth", authLimiter);
+// [DISABLED] Auth rate limiter — re-enable when needed
+// const authLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 20,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { success: false, message: "Too many auth attempts, please try again later." },
+// });
+// app.use("/api/auth", authLimiter);
 
 // ---------- Health check ----------
 app.get("/health", (_req: Request, res: Response) => {
