@@ -1,0 +1,125 @@
+============================================================
+  MediQueue AI — Demo Accounts
+  Hospital Management System | Santosh Medical Department
+============================================================
+
+  All accounts use the same password: Demo@1234
+  App URL: http://localhost:5173
+
+------------------------------------------------------------
+  ADMIN
+------------------------------------------------------------
+  Role     : Admin (Full system access, user management)
+  Email    : admin@mediqueue.com
+  Password : Demo@1234
+
+------------------------------------------------------------
+  RECEPTION
+------------------------------------------------------------
+  Role     : Reception (Book appointments, manage queue, allocate beds)
+  Email    : reception@mediqueue.com
+  Password : Demo@1234
+
+------------------------------------------------------------
+  NURSES
+------------------------------------------------------------
+  Role     : Nurse (Triage assessments, queue management)
+
+  Email    : nurse1@mediqueue.com
+  Password : Demo@1234
+
+  Email    : nurse2@mediqueue.com
+  Password : Demo@1234
+
+------------------------------------------------------------
+  DOCTORS
+------------------------------------------------------------
+  Role     : Doctor (Doctor queue, assessments)
+
+  Department   : Cardiology
+  Email        : dr.arjun@mediqueue.com
+  Password     : Demo@1234
+
+  Department   : Orthopedics
+  Email        : dr.meena@mediqueue.com
+  Password     : Demo@1234
+
+  Department   : Pediatrics
+  Email        : dr.ravi@mediqueue.com
+  Password     : Demo@1234
+
+  Department   : General Medicine
+  Email        : dr.sunita@mediqueue.com
+  Password     : Demo@1234
+
+  Department   : Dermatology
+  Email        : dr.kiran@mediqueue.com
+  Password     : Demo@1234
+
+  Department   : ENT
+  Email        : dr.pooja@mediqueue.com
+  Password     : Demo@1234
+
+  Department   : Gynecology
+  Email        : dr.ramesh@mediqueue.com
+  Password     : Demo@1234
+
+  Department   : Neurology
+  Email        : dr.anita@mediqueue.com
+  Password     : Demo@1234
+
+  Department   : Emergency
+  Email        : dr.vikram@mediqueue.com
+  Password     : Demo@1234
+
+------------------------------------------------------------
+  PATIENTS
+------------------------------------------------------------
+  Role     : Patient (Book appointments, view queue position)
+
+  Name     : Rajesh Krishnan
+  Email    : rajesh.krishnan@gmail.com
+  Password : Demo@1234
+
+  Name     : Deepa S
+  Email    : deepa.s@yahoo.com
+  Password : Demo@1234
+
+  Name     : Faisal M
+  Email    : faisal.m@outlook.com
+  Password : Demo@1234
+
+  Name     : Kavya Reddy
+  Email    : kavya.reddy@gmail.com
+  Password : Demo@1234
+
+  Name     : Arun Prakash  [Currently admitted — Bed: CARD-B-03]
+  Email    : arun.p@gmail.com
+  Password : Demo@1234
+
+  Name     : Preethi N
+  Email    : preethi.n@gmail.com
+  Password : Demo@1234
+
+  Name     : Sathish K
+  Email    : sathish.k@gmail.com
+  Password : Demo@1234
+
+  Name     : Nithya Mohan
+  Email    : nithya.mohan@gmail.com
+  Password : Demo@1234
+
+------------------------------------------------------------
+  QUICK SUMMARY
+------------------------------------------------------------
+  Total Accounts : 21
+    - Admin      : 1
+    - Reception  : 1
+    - Nurses     : 2
+    - Doctors    : 9  (one per department)
+    - Patients   : 8
+
+  NOTE: Run `npm run seed` from the /server directory to
+  populate the database with all demo accounts before login.
+
+============================================================
