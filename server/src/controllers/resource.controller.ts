@@ -3,6 +3,8 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { ApiResponse } from '../utils/ApiResponse';
 import { ApiError } from '../utils/ApiError';
 import * as resourceService from '../services/resource.service';
+import * as ventilatorService from '../services/ventilator.service';
+import * as shortageService from '../services/shortage.service';
 import { ResourceType } from '../models/Resource.model';
 
 export const getResources = asyncHandler(async (req: Request, res: Response) => {
@@ -43,5 +45,36 @@ export const forecastVentilators = asyncHandler(async (req: Request, res: Respon
 export const getShortageRiskController = asyncHandler(async (req: Request, res: Response) => {
   const { hospitalId, type } = req.params;
   const risk = await resourceService.getShortageRisk(hospitalId, type as ResourceType);
+  res.status(200).json(new ApiResponse(200, risk));
+});
+
+export const getVentilatorStatusController = asyncHandler(async (req: Request, res: Response) => {
+  const { hospitalId } = req.params;
+  const status = await ventilatorService.getVentilatorStatus(hospitalId);
+  res.status(200).json(new ApiResponse(200, status));
+});
+
+export const getShortageForecastController = asyncHandler(async (req: Request, res: Response) => {
+  const { hospitalId, type, arrivals, window } = req.query;
+  if (!hospitalId || !type) throw ApiError.badRequest('hospitalId and type are required');
+  
+  const forecast = await shortageService.calculateGenericShortageRisk(
+    hospitalId as string,
+    type as ResourceType,
+    Number(arrivals) || 0,
+    Number(window) || 60
+  );
+  res.status(200).json(new ApiResponse(200, forecast));
+});
+
+export const calculateVentilatorRiskController = asyncHandler(async (req: Request, res: Response) => {
+  const { hospitalId, expectedCriticalArrivals, timeWindowMinutes } = req.body;
+  if (!hospitalId) throw ApiError.badRequest('hospitalId is required');
+  
+  const risk = await ventilatorService.calculateShortageRisk(
+    hospitalId,
+    Number(expectedCriticalArrivals) || 0,
+    Number(timeWindowMinutes) || 60
+  );
   res.status(200).json(new ApiResponse(200, risk));
 });

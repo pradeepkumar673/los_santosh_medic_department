@@ -116,7 +116,7 @@ function extractApiError(err: unknown): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function BookAppointmentPage({ onBooked }: { onBooked: () => void }) {
+export default function BookAppointmentPage({ onBooked }: { onBooked?: () => void }) {
   const user    = useAuthStore((s) => s.user);
   const profile = useAuthStore((s) => s.profile) as { _id?: string } | null;
 
@@ -323,7 +323,7 @@ export default function BookAppointmentPage({ onBooked }: { onBooked: () => void
       }
 
       toast.success("🎉 Appointment booked! Check your queue status.", { duration: 6000 });
-      onBooked();
+      onBooked?.();
     } catch (err) {
       toast.error(extractApiError(err));
     } finally {

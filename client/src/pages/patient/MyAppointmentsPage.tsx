@@ -19,7 +19,7 @@ const statusBadge = (s: string) => {
   return <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">Cancelled</span>;
 };
 
-export default function MyAppointmentsPage({ onBook }: { onBook: () => void }) {
+export default function MyAppointmentsPage({ onBook }: { onBook?: () => void }) {
   const [filter, setFilter] = useState<Filter>("all");
 
   useRealtimeAppointments({

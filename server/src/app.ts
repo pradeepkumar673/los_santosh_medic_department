@@ -22,6 +22,7 @@ import assessmentRoutes from "./routes/assessment.routes";
 import hospitalRoutes from "./routes/hospital.routes";
 import resourceRoutes from "./routes/resource.routes";
 import incidentRoutes from "./routes/incident.routes";
+import recommendationRoutes from "./routes/recommendation.routes";
 
 const app: Application = express();
 
@@ -86,6 +87,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/hospitals", hospitalRoutes);
 app.use("/api/resources", resourceRoutes);
 app.use("/api/incidents", incidentRoutes);
+app.use("/api/recommendations", recommendationRoutes);
 
 // ---------- 404 + error handling ----------
 app.use(notFoundHandler);

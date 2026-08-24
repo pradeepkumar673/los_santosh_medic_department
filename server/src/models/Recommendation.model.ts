@@ -17,6 +17,7 @@ export interface IRecommendation extends Document {
   explanation: string[];
   confidence: number;
   status: RecommendationStatus;
+  humanApprovalRequired: boolean;
   approvedBy?: Types.ObjectId;
   overrideReason?: string;
   createdAt: Date;
@@ -72,6 +73,11 @@ const recommendationSchema = new Schema<IRecommendation>(
       enum: ['pending', 'approved', 'rejected', 'overridden'],
       required: true,
       default: 'pending',
+    },
+    humanApprovalRequired: {
+      type: Boolean,
+      required: true,
+      default: true,
     },
     approvedBy: {
       type: Schema.Types.ObjectId,

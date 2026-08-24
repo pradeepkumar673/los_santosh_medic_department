@@ -1,78 +1,81 @@
 import {
-  LayoutDashboard, CalendarClock, Users, Stethoscope, Bed,
-  ClipboardList, Building2, UserCog, ListChecks, Activity, User,
+  LayoutDashboard,
+  CalendarClock,
+  Users,
+  Stethoscope,
+  ListChecks,
+  BedDouble,
+  ClipboardList,
+  ShieldPlus,
+  Siren,
 } from "lucide-react";
-import type { ComponentType } from "react";
-import { UserRole } from "../types/auth.types";
+import type { UserRole } from "../types/auth.types";
 
 export interface SidebarItem {
   label: string;
   path: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: React.FC<{ className?: string }>;
 }
 
-export const SIDEBAR_CONFIG: Record<UserRole, SidebarItem[]> = {
-  patient: [
-    { label: "Dashboard", path: "/patient/dashboard", icon: LayoutDashboard },
-    { label: "Book Appointment", path: "/patient/book", icon: Stethoscope },
-    { label: "My Appointments", path: "/patient/appointments", icon: CalendarClock },
-    { label: "Queue Status", path: "/patient/queue", icon: ListChecks },
-    { label: "Medical History", path: "/patient/history", icon: ClipboardList },
-    { label: "Profile", path: "/profile", icon: User },
+export const SIDEBAR_ITEMS: Record<UserRole, SidebarItem[]> = {
+  admin: [
+    { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
+    { label: "Users", path: "/admin/users", icon: Users },
+    { label: "Departments", path: "/admin/departments", icon: ShieldPlus },
+    { label: "Doctors", path: "/admin/doctors", icon: Stethoscope },
+    { label: "Beds", path: "/admin/beds", icon: BedDouble },
+    { label: "Appointments", path: "/admin/appointments", icon: CalendarClock },
+    { label: "Emergency Command", path: "/emergency", icon: Siren },
   ],
   doctor: [
-    { label: "Dashboard", path: "/doctor/dashboard", icon: LayoutDashboard },
-    { label: "Live Queue", path: "/doctor/queue", icon: Activity },
-    { label: "Appointments", path: "/doctor/appointments", icon: CalendarClock },
-    { label: "My Patients", path: "/doctor/patients", icon: Users },
-    { label: "Profile", path: "/profile", icon: User },
+    { label: "Dashboard", path: "/doctor", icon: LayoutDashboard },
+    { label: "My Queue", path: "/doctor/queue", icon: ListChecks },
+    { label: "Emergency Command", path: "/emergency", icon: Siren },
   ],
   nurse: [
-    { label: "Dashboard", path: "/nurse/dashboard", icon: LayoutDashboard },
-    { label: "Bed Board", path: "/nurse/beds", icon: Bed },
-    { label: "Queue Monitor", path: "/nurse/queue", icon: Activity },
-    { label: "Profile", path: "/profile", icon: User },
+    { label: "Dashboard", path: "/nurse", icon: LayoutDashboard },
+    { label: "Queue", path: "/nurse/queue", icon: ListChecks },
+    { label: "Assessments", path: "/nurse/assessments", icon: ClipboardList },
+    { label: "Emergency Command", path: "/emergency", icon: Siren },
   ],
   reception: [
-    { label: "Dashboard", path: "/reception/dashboard", icon: LayoutDashboard },
+    { label: "Dashboard", path: "/reception", icon: LayoutDashboard },
+    { label: "Queue", path: "/reception/queue", icon: ListChecks },
     { label: "Appointments", path: "/reception/appointments", icon: CalendarClock },
-    { label: "Queue Management", path: "/reception/queue", icon: ListChecks },
-    { label: "Bed Board", path: "/reception/beds", icon: Bed },
+    { label: "Beds", path: "/reception/beds", icon: BedDouble },
     { label: "Patients", path: "/reception/patients", icon: Users },
-    { label: "Profile", path: "/profile", icon: User },
   ],
-  admin: [
-    { label: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
-    { label: "Departments", path: "/admin/departments", icon: Building2 },
-    { label: "Doctors", path: "/admin/doctors", icon: Stethoscope },
-    { label: "Staff & Users", path: "/admin/users", icon: UserCog },
-    { label: "Patients", path: "/admin/patients", icon: Users },
-    { label: "Bed Board", path: "/admin/beds", icon: Bed },
-    { label: "Reports", path: "/admin/reports", icon: ClipboardList },
-    { label: "Profile", path: "/profile", icon: User },
+  patient: [
+    { label: "Dashboard", path: "/patient", icon: LayoutDashboard },
+    { label: "Book Appointment", path: "/patient/book", icon: CalendarClock },
+    { label: "My Appointments", path: "/patient/appointments", icon: ClipboardList },
+    { label: "Live Queue", path: "/patient/queue", icon: ListChecks },
+    { label: "Medical History", path: "/patient/history", icon: Stethoscope },
   ],
 };
 
+export const SIDEBAR_CONFIG = SIDEBAR_ITEMS;
+
 export const ROLE_LABELS: Record<UserRole, string> = {
-  patient: "Patient",
+  admin: "Administrator",
   doctor: "Doctor",
   nurse: "Nurse",
-  reception: "Front Desk",
-  admin: "Administrator",
+  reception: "Receptionist",
+  patient: "Patient",
 };
 
 export const ROLE_ACCENT: Record<UserRole, string> = {
-  patient: "#0EA5E9",
-  doctor: "#14B8A6",
-  nurse: "#A855F7",
-  reception: "#F59E0B",
-  admin: "#EF4444",
+  admin: "#9333ea",
+  doctor: "#2563eb",
+  nurse: "#0d9488",
+  reception: "#d97706",
+  patient: "#059669",
 };
 
 export const DEFAULT_ROUTE_BY_ROLE: Record<UserRole, string> = {
-  patient: "/patient/dashboard",
-  doctor: "/doctor/dashboard",
-  nurse: "/nurse/dashboard",
-  reception: "/reception/dashboard",
-  admin: "/admin/dashboard",
+  admin: "/admin",
+  doctor: "/doctor",
+  nurse: "/nurse",
+  reception: "/reception",
+  patient: "/patient",
 };
