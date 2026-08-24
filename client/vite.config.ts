@@ -6,5 +6,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-  }
+    host: true,
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'zustand', 'axios', 'socket.io-client'],
+  },
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
 })

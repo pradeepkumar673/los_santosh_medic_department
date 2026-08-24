@@ -13,13 +13,11 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-    const isAuthEndpoint = ["/auth/login", "/auth/register", "/auth/refresh"].some((p) =>
+    const isAuthEndpoint = ["/auth/login", "/auth/register", "/auth/refresh", "/auth/me"].some((p) =>
       originalRequest?.url?.includes(p)
     );
 
-    // Why: a 401 mid-session means the access token expired. We attempt ONE
-    // silent refresh (matches the backend's rotation logic) and replay the
-    // original request instead of forcing a re-login on every page.
+    // Mid-session 401: access token expired. Attempt ONE silent refresh.
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
 
@@ -37,10 +35,8 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         pendingQueue = [];
-        // Dynamic import avoids a circular import with authStore.ts
         const { useAuthStore } = await import("../store/authStore");
         useAuthStore.getState().forceLogout();
-        window.location.href = "/login";
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

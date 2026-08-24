@@ -66,8 +66,11 @@ export const errorHandler = (
   }
 
   if (!isProd) {
-    // Log full error in development
-    console.error(`❌ [${req.method} ${req.originalUrl}]`, err);
+    if (err instanceof ApiError && (err.statusCode === 401 || err.statusCode === 404)) {
+      console.log(`ℹ️ [${req.method} ${req.originalUrl}] ${err.statusCode} ${err.message}`);
+    } else {
+      console.error(`❌ [${req.method} ${req.originalUrl}]`, err);
+    }
   }
 
   res.status(statusCode).json({
