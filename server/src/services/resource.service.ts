@@ -1,6 +1,17 @@
 import Resource, { IResource, ResourceType } from '../models/Resource.model';
 import { ApiError } from '../utils/ApiError';
 import mongoose from 'mongoose';
+import { getIO, ROOMS } from '../config/socket';
+
+function emitResourceChange(resource: IResource) {
+  try {
+    const io = getIO();
+    io.to(ROOMS.emergencyCommand).emit('resource-status-changed', { resource });
+    io.to(ROOMS.adminDashboard).emit('resource-status-changed', { resource });
+  } catch (e) {
+    // Socket not initialized
+  }
+}
 
 export const getHospitalResources = async (
   hospitalId: string,
@@ -14,7 +25,7 @@ export const getHospitalResources = async (
 
 export const updateResourceStatus = async (
   resourceId: string,
-  update: Partial<IResource> & { reason?: string; status?: string }
+  update: Partial<IResource> & { reason?: string }
 ): Promise<IResource> => {
   const resource = await Resource.findById(resourceId);
   if (!resource) throw ApiError.notFound('Resource not found');
@@ -27,12 +38,13 @@ export const updateResourceStatus = async (
   if (update.releaseConfidence !== undefined) resource.releaseConfidence = update.releaseConfidence;
   
   resource.statusHistory.push({
-    status: update.status || 'updated',
+    status: (update as any).status || 'updated',
     changedAt: new Date(),
     reason: update.reason || 'Manual update'
   });
 
   await resource.save();
+  emitResourceChange(resource);
   return resource;
 };
 
@@ -52,6 +64,7 @@ export const reserveResource = async (resourceId: string, quantity: number): Pro
   });
   
   await resource.save();
+  emitResourceChange(resource);
   return resource;
 };
 
@@ -75,6 +88,7 @@ export const releaseResource = async (resourceId: string, quantity: number): Pro
   });
   
   await resource.save();
+  emitResourceChange(resource);
   return resource;
 };
 

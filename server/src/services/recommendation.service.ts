@@ -60,11 +60,13 @@ function emitRecommendationEvent(
 ): void {
   try {
     const io = getIO();
-    io.to(ROOMS.adminDashboard).emit('recommendation-updated', {
+    const payload = {
       recommendation,
       ...extra,
       updatedAt: new Date(),
-    });
+    };
+    io.to(ROOMS.adminDashboard).emit('recommendation-updated', payload);
+    io.to(ROOMS.emergencyCommand).emit('recommendation-updated', payload);
   } catch {
     // Socket layer not initialized — audit log remains the source of truth.
   }

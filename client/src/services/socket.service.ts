@@ -1,4 +1,3 @@
-// client/src/services/socket.service.ts
 import { io, Socket } from "socket.io-client";
 import { useAuthStore } from "../store/authStore";
 
@@ -82,6 +81,11 @@ export interface ServerToClientEvents {
   "new-appointment": (payload: NewAppointmentPayload) => void;
   "patient-status-changed": (payload: PatientStatusChangedPayload) => void;
   "bed-status-changed": (payload: BedStatusChangedPayload) => void;
+  "incident-created": (payload: { incident: any }) => void;
+  "incident-updated": (payload: { incident: any }) => void;
+  "resource-status-changed": (payload: { resource: any }) => void;
+  "recommendation-updated": (payload: { recommendation: any; [key: string]: any }) => void;
+  "shortage-alert": (payload: { hospitalId: string; riskLevel: string; shortageProbability: number; recommendedActions: string[] }) => void;
 }
 
 type EventHandler<E extends keyof ServerToClientEvents> = ServerToClientEvents[E];
@@ -103,7 +107,6 @@ class SocketService {
     this.socket.on("connect", () => {
       console.log("[Socket] connected:", this.socket?.id);
       this.autoJoinRoomsForRole();
-      // Re-register any existing listeners after reconnect
       this.listeners.forEach((handlers, event) => {
         handlers.forEach((handler) => {
           this.socket?.on(event, handler as any);
@@ -114,6 +117,7 @@ class SocketService {
     this.socket.on("connect_error", (err) =>
       console.error("[Socket] error:", err.message)
     );
+
     this.socket.on("disconnect", (reason) =>
       console.warn("[Socket] disconnected:", reason)
     );
@@ -130,6 +134,10 @@ class SocketService {
     }
     if (user.role === "patient") {
       this.socket.emit("join:my-queue", user.id);
+    }
+    // Auto-join emergency command for relevant roles
+    if (["admin", "nurse", "doctor", "reception"].includes(user.role)) {
+      this.joinEmergencyCommand();
     }
   }
 
@@ -150,6 +158,9 @@ class SocketService {
   }
   joinAdminDashboard() {
     this.socket?.emit("join:admin-dashboard");
+  }
+  joinEmergencyCommand() {
+    this.socket?.emit("join:emergency-command");
   }
 
   on<E extends keyof ServerToClientEvents>(event: E, handler: EventHandler<E>) {

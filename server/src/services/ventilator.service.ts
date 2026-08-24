@@ -2,6 +2,7 @@ import Resource, { IResource } from '../models/Resource.model';
 import Incident from '../models/Incident.model';
 import { ApiError } from '../utils/ApiError';
 import mongoose from 'mongoose';
+import { getIO, ROOMS } from '../config/socket';
 
 const VENTILATOR_TURNAROUND_MINUTES = 30;
 
@@ -154,6 +155,21 @@ export async function calculateShortageRisk(
   }
   if (expectedReleases === 0 && status.occupied > 0) {
     recommendedActions.push('No ventilator releases predicted in the current window. Consider early discharge review or inter-hospital transfer.');
+  }
+
+  // Emit real-time alert if risk is High or Critical
+  if (riskLevel === 'High' || riskLevel === 'Critical') {
+    try {
+      const io = getIO();
+      io.to(ROOMS.emergencyCommand).emit('shortage-alert', {
+        hospitalId,
+        riskLevel,
+        shortageProbability,
+        recommendedActions
+      });
+    } catch (e) {
+      // Socket not initialized
+    }
   }
 
   return {

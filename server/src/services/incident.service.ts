@@ -2,16 +2,27 @@ import mongoose from 'mongoose';
 import Incident, { IIncident, IncidentSeverity } from '../models/Incident.model';
 import { getWeatherRisk } from './weather.service';
 import { ApiError } from '../utils/ApiError';
+import { getIO, ROOMS } from '../config/socket';
 
 export const createIncident = async (
   data: Partial<IIncident>,
   createdBy: string
 ): Promise<IIncident> => {
-  return Incident.create({
+  const incident = await Incident.create({
     ...data,
     createdBy: new mongoose.Types.ObjectId(createdBy),
     status: data.status || 'monitoring',
   });
+  
+  try {
+    const io = getIO();
+    io.to(ROOMS.emergencyCommand).emit('incident-created', { incident });
+    io.to(ROOMS.adminDashboard).emit('incident-created', { incident });
+  } catch (e) {
+    console.error('Failed to emit incident-created', e);
+  }
+  
+  return incident;
 };
 
 export const getIncidents = async (filter: any = {}): Promise<IIncident[]> => {
@@ -33,6 +44,15 @@ export const updateIncidentStatus = async (
   if (!incident) throw ApiError.notFound('Incident not found');
   incident.status = status as any;
   await incident.save();
+  
+  try {
+    const io = getIO();
+    io.to(ROOMS.emergencyCommand).emit('incident-updated', { incident });
+    io.to(ROOMS.adminDashboard).emit('incident-updated', { incident });
+  } catch (e) {
+    console.error('Failed to emit incident-updated', e);
+  }
+  
   return incident;
 };
 
@@ -71,6 +91,14 @@ export const checkWeatherAndAutoCreate = async (
       predictedArrivals: 0,
       createdBy: new mongoose.Types.ObjectId(createdBy)
     });
+    
+    try {
+      const io = getIO();
+      io.to(ROOMS.emergencyCommand).emit('incident-created', { incident });
+      io.to(ROOMS.adminDashboard).emit('incident-created', { incident });
+    } catch (e) {
+      console.error('Failed to emit weather incident-created', e);
+    }
     
     return { incident, risk, created: true };
   }
