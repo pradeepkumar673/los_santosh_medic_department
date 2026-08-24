@@ -33,6 +33,8 @@ import Bed from "../models/Bed.model";
 import BedAllocation from "../models/BedAllocation.model";
 import MedicalAssessment from "../models/MedicalAssessment.model";
 import Notification from "../models/Notification.model";
+import Hospital from "../models/Hospital.model";
+import Resource from "../models/Resource.model";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const MONGO_URI =
@@ -679,6 +681,8 @@ async function seed() {
     BedAllocation.deleteMany({}),
     MedicalAssessment.deleteMany({}),
     Notification.deleteMany({}),
+    Hospital.deleteMany({}),
+    Resource.deleteMany({}),
   ]);
   console.log("✅  Collections cleared\n");
 
@@ -1083,6 +1087,135 @@ async function seed() {
     });
     console.log("🛏   1 bed allocation created (Arun Prakash → CARD-B-03)\n");
   }
+
+  // ==========================================
+  // EMERGENCYFLOW AI SEED DATA (Hospitals & Resources)
+  // ==========================================
+  console.log("🏥  Seeding hospitals & resources for EmergencyFlow AI...");
+  
+  const hospitalsData = [
+    {
+      name: "Santosh Medical Center",
+      code: "SMC-MAIN",
+      location: { lat: 13.0827, lng: 80.2707, address: "123 Health Ave, Chennai" },
+      specialties: ["Cardiology", "Neurology", "Trauma", "Pediatrics"],
+      traumaLevel: 1,
+      contact: { phone: "9000000000", email: "contact@santoshmedical.com" },
+      isActive: true,
+    },
+    {
+      name: "City General Hospital",
+      code: "CGH-CITY",
+      location: { lat: 13.0604, lng: 80.2496, address: "456 City Rd, Chennai" },
+      specialties: ["General Medicine", "Orthopedics", "Emergency"],
+      traumaLevel: 2,
+      contact: { phone: "9000000099", email: "info@citygeneral.com" },
+      isActive: true,
+    },
+    {
+      name: "St. Jude's Trauma Center",
+      code: "SJT-TRAUMA",
+      location: { lat: 13.0475, lng: 80.2090, address: "789 Emergency Blvd, Chennai" },
+      specialties: ["Trauma", "Burns", "Neurosurgery"],
+      traumaLevel: 1,
+      contact: { phone: "9000000088", email: "trauma@stjudes.com" },
+      isActive: true,
+    },
+    {
+      name: "Mercy Care Clinic",
+      code: "MCC-CLINIC",
+      location: { lat: 13.0140, lng: 80.2175, address: "321 South St, Chennai" },
+      specialties: ["General Medicine", "Maternity"],
+      traumaLevel: 4,
+      contact: { phone: "9000000077", email: "help@mercycare.com" },
+      isActive: true,
+    },
+    {
+      name: "Apex Regional Hospital",
+      code: "ARH-REGIONAL",
+      location: { lat: 13.1067, lng: 80.2206, address: "999 North Highway, Chennai" },
+      specialties: ["Cardiology", "Oncology", "ICU"],
+      traumaLevel: 2,
+      contact: { phone: "9000000066", email: "admin@apexregional.com" },
+      isActive: true,
+    }
+  ];
+
+  const insertedHospitals = await Hospital.insertMany(hospitalsData);
+
+  const resourceTemplates = [
+    { type: "icu_bed", total: 10, occupied: 6, reserved: 1, maintenance: 1, available: 2 },
+    { type: "emergency_bed", total: 20, occupied: 15, reserved: 0, maintenance: 0, available: 5 },
+    { type: "oxygen", total: 50, occupied: 20, reserved: 0, maintenance: 0, available: 30 },
+    { type: "blood_o_neg", total: 40, occupied: 0, reserved: 5, maintenance: 0, available: 35 },
+    { type: "ambulance", total: 4, occupied: 2, reserved: 0, maintenance: 1, available: 1 },
+    { type: "trauma_nurse", total: 15, occupied: 10, reserved: 0, maintenance: 0, available: 5 },
+  ];
+
+  const resourcesData: any[] = [];
+
+  for (const hospital of insertedHospitals) {
+    const isCityGeneral = hospital.code === "CGH-CITY";
+    const isSantosh = hospital.code === "SMC-MAIN";
+    
+    // Seed Aggregate Resources
+    for (const tmpl of resourceTemplates) {
+      let { total, occupied, reserved, maintenance, available } = tmpl;
+      if (isSantosh) {
+        total = Math.round(total * 1.5);
+        occupied = Math.round(occupied * 1.5);
+        available = total - occupied - reserved - maintenance;
+      }
+      
+      resourcesData.push({
+        hospitalId: hospital._id,
+        type: tmpl.type,
+        total, available, occupied, reserved, maintenance,
+        statusHistory: [{ status: "initialized", changedAt: new Date() }]
+      });
+    }
+
+    // Seed Ventilators
+    const ventTotal = hospital.code === "MCC-CLINIC" ? 2 : (isSantosh ? 8 : 6);
+    
+    if (isCityGeneral) {
+      // Edge Case: All occupied, with different release times (for AI forecasting testing)
+      for (let i = 0; i < ventTotal; i++) {
+        const hoursAhead = 2 + Math.random() * 46; // 2 to 48 hours
+        const confidence = 0.4 + Math.random() * 0.55; // 0.4 to 0.95
+        resourcesData.push({
+          hospitalId: hospital._id,
+          type: "ventilator",
+          total: 1,
+          available: 0,
+          occupied: 1,
+          reserved: 0,
+          maintenance: 0,
+          expectedReleaseTime: new Date(Date.now() + hoursAhead * 60 * 60 * 1000),
+          releaseConfidence: confidence,
+          statusHistory: [{ status: "occupied", changedAt: new Date() }]
+        });
+      }
+    } else {
+      const ventMaintenance = ventTotal > 4 ? 1 : 0;
+      const ventOccupied = Math.floor((ventTotal - ventMaintenance) * 0.4);
+      const ventAvailable = ventTotal - ventMaintenance - ventOccupied;
+      
+      resourcesData.push({
+        hospitalId: hospital._id,
+        type: "ventilator",
+        total: ventTotal,
+        available: ventAvailable,
+        occupied: ventOccupied,
+        reserved: 0,
+        maintenance: ventMaintenance,
+        statusHistory: [{ status: "initialized", changedAt: new Date() }]
+      });
+    }
+  }
+
+  await Resource.insertMany(resourcesData);
+  console.log(`    ↳ ${insertedHospitals.length} hospitals and ${resourcesData.length} resources created\n`);
 
   // ── Summary ────────────────────────────────────────────────────────────────
   console.log("══════════════════════════════════════════════");
