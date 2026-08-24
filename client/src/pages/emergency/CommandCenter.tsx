@@ -11,6 +11,7 @@ import {
   Plus,
   ChevronRight,
   Wind as WindIcon,
+  FlaskConical,
 } from "lucide-react";
 import { useEmergencyStore } from "../../store/emergencyStore";
 import WeatherRiskBanner from "../../components/emergency/WeatherRiskBanner";
@@ -101,6 +102,13 @@ export default function CommandCenter() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/emergency/simulator")}
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3.5 py-2 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-colors"
+          >
+            <FlaskConical className="h-4 w-4" />
+            What-If Simulator
+          </button>
           <button
             onClick={() => navigate("/emergency/incidents/new")}
             className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-red-700 transition-colors"

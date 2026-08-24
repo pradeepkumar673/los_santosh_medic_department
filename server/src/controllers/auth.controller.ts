@@ -40,8 +40,15 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     throw ApiError.conflict("A user with this email or phone already exists.");
   }
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session: mongoose.ClientSession | null = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch {
+    session = null;
+  }
+
+  const sessionOpt = session ? { session } : undefined;
 
   try {
     let createdUser: IUser;
@@ -59,7 +66,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
               role: "patient",
             },
           ],
-          { session }
+          sessionOpt
         );
 
         await Patient.create(
@@ -81,7 +88,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
               abhaId: body.abhaId,
             },
           ],
-          { session }
+          sessionOpt
         );
 
         createdUser = user;
@@ -96,7 +103,8 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
           );
         }
 
-        const department = await Department.findById(body.department).session(session);
+        const deptQuery = Department.findById(body.department);
+        const department = session ? await deptQuery.session(session) : await deptQuery;
         if (!department) {
           throw ApiError.badRequest("The specified department does not exist.");
         }
@@ -104,9 +112,8 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
           throw ApiError.badRequest("Cannot register to an inactive department.");
         }
 
-        const licenseConflict = await Doctor.findOne({
-          licenseNumber: body.licenseNumber,
-        }).session(session);
+        const licQuery = Doctor.findOne({ licenseNumber: body.licenseNumber });
+        const licenseConflict = session ? await licQuery.session(session) : await licQuery;
         if (licenseConflict) {
           throw ApiError.conflict("A doctor with this license number already exists.");
         }
@@ -121,7 +128,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
               role: "doctor",
             },
           ],
-          { session }
+          sessionOpt
         );
 
         await Doctor.create(
@@ -138,7 +145,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
               maxPatientsPerDay: body.maxPatientsPerDay ?? 30,
             },
           ],
-          { session }
+          sessionOpt
         );
 
         createdUser = user;
@@ -158,7 +165,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
               role: body.role,
             },
           ],
-          { session }
+          sessionOpt
         );
 
         createdUser = user;
@@ -181,7 +188,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
               role: "admin",
             },
           ],
-          { session }
+          sessionOpt
         );
         createdUser = user;
         break;
@@ -198,10 +205,13 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     const refreshToken = generateRefreshToken(payload);
 
     createdUser.refreshToken = refreshToken;
-    await createdUser.save({ session });
-
-    await session.commitTransaction();
-    session.endSession();
+    if (session) {
+      await createdUser.save({ session });
+      await session.commitTransaction();
+      session.endSession();
+    } else {
+      await createdUser.save();
+    }
 
     setAuthCookies(res, accessToken, refreshToken);
 
@@ -216,8 +226,10 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
+    if (session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
     throw err;
   }
 });

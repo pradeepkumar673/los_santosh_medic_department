@@ -1,28 +1,6 @@
-/**
- * server/src/utils/seed.ts
- * ─────────────────────────────────────────────────────────────────────────────
- * MediQueue AI — Demo Data Seed Script
- *
- * Populates: Departments → Users → Doctors → Patients → Appointments →
- *            QueueEntries → Beds
- *
- * Run:
- *   cd server
- *   npx ts-node -r tsconfig-paths/register src/utils/seed.ts
- *
- * Or (after adding the npm script):
- *   npm run seed
- *
- * Idempotent: drops all seeded collections before re-inserting, so it is
- * safe to run multiple times without duplicate-key errors.
- * ─────────────────────────────────────────────────────────────────────────────
- */
-
 import "dotenv/config";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-
-// ── Models ────────────────────────────────────────────────────────────────────
 import User from "../models/User.model";
 import Department from "../models/Department.model";
 import Doctor from "../models/Doctor.model";
@@ -35,16 +13,13 @@ import MedicalAssessment from "../models/MedicalAssessment.model";
 import Notification from "../models/Notification.model";
 import Hospital from "../models/Hospital.model";
 import Resource from "../models/Resource.model";
+import Incident from "../models/Incident.model";
+import Recommendation from "../models/Recommendation.model";
 
-// ── Config ────────────────────────────────────────────────────────────────────
 const MONGO_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/mediqueue_ai";
+const DEMO_PASSWORD = "Demo@1234";
 
-const DEMO_PASSWORD = "Demo@1234"; // All demo accounts share this password
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. DEPARTMENTS
-// ─────────────────────────────────────────────────────────────────────────────
 const DEPARTMENTS = [
   {
     name: "Cardiology",
@@ -102,11 +77,7 @@ const DEPARTMENTS = [
   },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. STAFF USERS (admin, reception, nurses, doctors)
-// ─────────────────────────────────────────────────────────────────────────────
 const STAFF_USERS = [
-  // Admin
   {
     name: "Dr. Santosh Kumar",
     email: "admin@mediqueue.com",
@@ -114,7 +85,6 @@ const STAFF_USERS = [
     role: "admin" as const,
     isVerified: true,
   },
-  // Reception
   {
     name: "Priya Menon",
     email: "reception@mediqueue.com",
@@ -122,7 +92,6 @@ const STAFF_USERS = [
     role: "reception" as const,
     isVerified: true,
   },
-  // Nurses
   {
     name: "Nurse Lakshmi",
     email: "nurse1@mediqueue.com",
@@ -137,7 +106,6 @@ const STAFF_USERS = [
     role: "nurse" as const,
     isVerified: true,
   },
-  // Doctors — one per department (9)
   {
     name: "Dr. Arjun Sharma",
     email: "dr.arjun@mediqueue.com",
@@ -203,10 +171,6 @@ const STAFF_USERS = [
   },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 3. DOCTOR PROFILES  (maps to STAFF_USERS index 4-12)
-// ─────────────────────────────────────────────────────────────────────────────
-// doctorIndex → departmentName mapping
 const DOCTOR_DEPT_MAP: Record<number, string> = {
   0: "Cardiology",
   1: "Orthopedics",
@@ -303,7 +267,6 @@ const DOCTOR_PROFILES = [
   },
 ];
 
-// Standard Mon-Fri working hours for all doctors
 const STANDARD_WORKING_HOURS = [
   { day: "mon", startTime: "09:00", endTime: "17:00" },
   { day: "tue", startTime: "09:00", endTime: "17:00" },
@@ -313,9 +276,6 @@ const STANDARD_WORKING_HOURS = [
   { day: "sat", startTime: "09:00", endTime: "13:00" },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 4. PATIENT USERS + PROFILES
-// ─────────────────────────────────────────────────────────────────────────────
 const PATIENT_SEED_DATA = [
   {
     user: {
@@ -543,13 +503,8 @@ const PATIENT_SEED_DATA = [
   },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 5. BED DEFINITIONS  (keyed by department name)
-// ─────────────────────────────────────────────────────────────────────────────
 function buildBeds(deptMap: Map<string, mongoose.Types.ObjectId>) {
   const beds: any[] = [];
-
-  // ── General Medicine ── Floor 1, Ward A
   for (let i = 1; i <= 6; i++) {
     beds.push({
       bedNumber: `GM-A-${String(i).padStart(2, "0")}`,
@@ -562,8 +517,6 @@ function buildBeds(deptMap: Map<string, mongoose.Types.ObjectId>) {
       amenities: ["Call bell", "Side table", "TV"],
     });
   }
-
-  // ── Cardiology ── Floor 2, Ward B
   for (let i = 1; i <= 5; i++) {
     beds.push({
       bedNumber: `CARD-B-${String(i).padStart(2, "0")}`,
@@ -579,8 +532,6 @@ function buildBeds(deptMap: Map<string, mongoose.Types.ObjectId>) {
           : ["Call bell", "ECG port", "IV stand"],
     });
   }
-
-  // ── Orthopedics ── Floor 2, Ward C
   for (let i = 1; i <= 4; i++) {
     beds.push({
       bedNumber: `ORTH-C-${String(i).padStart(2, "0")}`,
@@ -596,8 +547,6 @@ function buildBeds(deptMap: Map<string, mongoose.Types.ObjectId>) {
           : ["Call bell", "Traction equipment"],
     });
   }
-
-  // ── Pediatrics ── Floor 3, Ward D
   for (let i = 1; i <= 5; i++) {
     beds.push({
       bedNumber: `PEDS-D-${String(i).padStart(2, "0")}`,
@@ -610,8 +559,6 @@ function buildBeds(deptMap: Map<string, mongoose.Types.ObjectId>) {
       amenities: ["Cot rails", "Playful decor", "Parent recliner"],
     });
   }
-
-  // ── Gynecology ── Floor 3, Ward E (maternity)
   for (let i = 1; i <= 4; i++) {
     beds.push({
       bedNumber: `GYNE-E-${String(i).padStart(2, "0")}`,
@@ -624,8 +571,6 @@ function buildBeds(deptMap: Map<string, mongoose.Types.ObjectId>) {
       amenities: ["Birthing bed", "Baby cot", "Breastfeeding screen"],
     });
   }
-
-  // ── Neurology ── Floor 4, Ward F
   for (let i = 1; i <= 3; i++) {
     beds.push({
       bedNumber: `NEUR-F-${String(i).padStart(2, "0")}`,
@@ -638,8 +583,6 @@ function buildBeds(deptMap: Map<string, mongoose.Types.ObjectId>) {
       amenities: i === 1 ? ["EEG monitoring", "Ventilator"] : ["Call bell"],
     });
   }
-
-  // ── Emergency ── Ground Floor, Ward G
   for (let i = 1; i <= 6; i++) {
     beds.push({
       bedNumber: `EMER-G-${String(i).padStart(2, "0")}`,
@@ -652,24 +595,17 @@ function buildBeds(deptMap: Map<string, mongoose.Types.ObjectId>) {
       amenities: ["Defibrillator", "IV stand", "Oxygen port", "Monitor"],
     });
   }
-
   return beds;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN SEED FUNCTION
-// ─────────────────────────────────────────────────────────────────────────────
 async function seed() {
   console.log("\n🌱  MediQueue AI — Seed Script");
-  console.log("══════════════════════════════════════════════\n");
-
-  // ── Connect ────────────────────────────────────────────────────────────────
-  console.log(`📡  Connecting to MongoDB: ${MONGO_URI}`);
+  console.log("=========================================================\n");
+  console.log(`🔌  Connecting to MongoDB: ${MONGO_URI}`);
   await mongoose.connect(MONGO_URI);
   console.log("✅  Connected\n");
 
-  // ── Wipe existing demo data ────────────────────────────────────────────────
-  console.log("🗑   Clearing existing collections…");
+  console.log("🧹   Clearing existing collections...");
   await Promise.all([
     User.deleteMany({}),
     Department.deleteMany({}),
@@ -683,22 +619,21 @@ async function seed() {
     Notification.deleteMany({}),
     Hospital.deleteMany({}),
     Resource.deleteMany({}),
+    Incident.deleteMany({}),
+    Recommendation.deleteMany({}),
   ]);
   console.log("✅  Collections cleared\n");
 
-  // ── Hash shared demo password once ────────────────────────────────────────
   const hashedPassword = await bcrypt.hash(DEMO_PASSWORD, 10);
 
-  // ── 1. Departments ─────────────────────────────────────────────────────────
-  console.log("🏥  Seeding departments…");
+  console.log("🏢  Seeding departments...");
   const departments = await Department.insertMany(DEPARTMENTS);
   const deptMap = new Map<string, mongoose.Types.ObjectId>(
     departments.map((d) => [d.name, d._id as mongoose.Types.ObjectId])
   );
-  console.log(`    ↳ ${departments.length} departments created\n`);
+  console.log(`    ➜ ${departments.length} departments created\n`);
 
-  // ── 2. Staff users ─────────────────────────────────────────────────────────
-  console.log("👥  Seeding staff users…");
+  console.log("👥  Seeding staff users...");
   const staffUsers = await User.insertMany(
     STAFF_USERS.map((u) => ({
       ...u,
@@ -706,12 +641,11 @@ async function seed() {
       isActive: true,
     }))
   );
-  // Split out doctor users (index 4 onward in STAFF_USERS)
   const doctorUsers = staffUsers.slice(4);
-  console.log(`    ↳ ${staffUsers.length} staff users created\n`);
+  const adminUser = staffUsers[0];
+  console.log(`    ➜ ${staffUsers.length} staff users created\n`);
 
-  // ── 3. Doctor profiles ─────────────────────────────────────────────────────
-  console.log("🩺  Seeding doctor profiles…");
+  console.log("👨‍⚕️  Seeding doctor profiles...");
   const doctorDocs = await Doctor.insertMany(
     DOCTOR_PROFILES.map((profile, idx) => ({
       user: doctorUsers[idx]._id,
@@ -720,8 +654,6 @@ async function seed() {
       ...profile,
     }))
   );
-
-  // Update departments with headDoctor reference
   await Promise.all(
     doctorDocs.map((doc, idx) =>
       Department.findByIdAndUpdate(deptMap.get(DOCTOR_DEPT_MAP[idx])!, {
@@ -729,16 +661,14 @@ async function seed() {
       })
     )
   );
-  console.log(`    ↳ ${doctorDocs.length} doctor profiles created\n`);
+  console.log(`    ➜ ${doctorDocs.length} doctor profiles created\n`);
 
-  // Create a lookup map: doctorId (Doctor._id) → Doctor doc
   const doctorByDept = new Map<string, (typeof doctorDocs)[0]>();
   doctorDocs.forEach((doc, idx) => {
     doctorByDept.set(DOCTOR_DEPT_MAP[idx], doc);
   });
 
-  // ── 4. Patient users + profiles ────────────────────────────────────────────
-  console.log("🤒  Seeding patients…");
+  console.log("🧑‍🤝‍🧑  Seeding patients...");
   const patientUsers = await User.insertMany(
     PATIENT_SEED_DATA.map((p) => ({
       name: p.user.name,
@@ -750,34 +680,25 @@ async function seed() {
       isVerified: true,
     }))
   );
-
   const patients = await Patient.insertMany(
     PATIENT_SEED_DATA.map((p, idx) => ({
       user: patientUsers[idx]._id,
       ...p.profile,
     }))
   );
-  console.log(`    ↳ ${patients.length} patients created\n`);
+  console.log(`    ➜ ${patients.length} patients created\n`);
 
-  // ── 5. Appointments ────────────────────────────────────────────────────────
-  console.log("📅  Seeding appointments…");
-
-  // Use reception user as createdBy for all seed appointments
-  const receptionUser = staffUsers[1]; // Priya Menon
-
+  console.log("📅  Seeding appointments...");
+  const receptionUser = staffUsers[1];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-
   const twoDaysAgo = new Date(today);
   twoDaysAgo.setDate(today.getDate() - 2);
 
-  // Appointment seed data: [patientIdx, deptName, date, timeSlot, type, status, symptoms]
   type AppSeed = [
     number,
     string,
@@ -796,7 +717,6 @@ async function seed() {
   ];
 
   const appointmentSeeds: AppSeed[] = [
-    // Today's live appointments
     [
       0,
       "Cardiology",
@@ -867,7 +787,6 @@ async function seed() {
       ["severe headache", "nausea"],
       "Recurring migraine episodes",
     ],
-    // Yesterday's completed/no-show appointments
     [
       5,
       "Gynecology",
@@ -898,7 +817,6 @@ async function seed() {
       ["diabetes checkup"],
       "Quarterly diabetes and lipid panel review",
     ],
-    // Future appointments
     [
       1,
       "Pediatrics",
@@ -929,7 +847,6 @@ async function seed() {
       ["acne", "skin lesion"],
       "Acne treatment follow-up",
     ],
-    // Emergency
     [
       6,
       "Emergency",
@@ -972,11 +889,9 @@ async function seed() {
       }
     )
   );
-  console.log(`    ↳ ${appointments.length} appointments created\n`);
+  console.log(`    ➜ ${appointments.length} appointments created\n`);
 
-  // ── 6. Queue Entries (today's active queue) ────────────────────────────────
-  console.log("🔢  Seeding queue entries…");
-
+  console.log("🎫  Seeding queue entries...");
   const todayAppointments = appointments.filter(
     (a) =>
       a.scheduledDate.getTime() === today.getTime() &&
@@ -984,20 +899,15 @@ async function seed() {
         a.status
       )
   );
-
-  // Group by doctor
   const queueByDoctor = new Map<string, typeof todayAppointments>();
   for (const appt of todayAppointments) {
     const key = String(appt.doctor);
     if (!queueByDoctor.has(key)) queueByDoctor.set(key, []);
     queueByDoctor.get(key)!.push(appt);
   }
-
   const queueEntries: any[] = [];
   for (const [doctorId, appts] of queueByDoctor.entries()) {
-    // Find the doctor doc to get department
     const doctorDoc = doctorDocs.find((d) => String(d._id) === doctorId)!;
-
     let tokenNum = 1;
     for (const appt of appts) {
       const statusMap: Record<string, string> = {
@@ -1013,7 +923,6 @@ async function seed() {
           : appt.appointmentType === "walk_in"
           ? "high"
           : "normal";
-
       queueEntries.push({
         tokenNumber: tokenNum++,
         patient: appt.patient,
@@ -1034,46 +943,35 @@ async function seed() {
       });
     }
   }
-
   if (queueEntries.length > 0) {
     const insertedQueue = await QueueEntry.insertMany(queueEntries);
-
-    // Back-link appointments to their queue entries
     await Promise.all(
       insertedQueue.map((q) =>
         Appointment.findByIdAndUpdate(q.appointment, { queueEntry: q._id })
       )
     );
-    console.log(`    ↳ ${insertedQueue.length} queue entries created\n`);
+    console.log(`    ➜ ${insertedQueue.length} queue entries created\n`);
   } else {
-    console.log("    ↳ No today-queue entries needed\n");
+    console.log("    ➜ No today-queue entries needed\n");
   }
 
-  // ── 7. Beds ────────────────────────────────────────────────────────────────
-  console.log("🛏   Seeding beds…");
+  console.log("🛏️   Seeding beds...");
   const bedDefs = buildBeds(deptMap);
   const beds = await Bed.insertMany(bedDefs);
-  console.log(`    ↳ ${beds.length} beds created\n`);
-
-  // ── 8. Allocate one bed (occupied demo) ────────────────────────────────────
-  //  Allocate CARD-B-03 (general cardiology bed) to patient Arun Prakash
+  console.log(`    ➜ ${beds.length} beds created\n`);
   const cardBed = beds.find((b) => b.bedNumber === "CARD-B-03");
-  const arunPatient = patients[4]; // Arun Prakash
-
+  const arunPatient = patients[4];
   if (cardBed) {
     const allocatedAt = new Date(today);
     allocatedAt.setDate(allocatedAt.getDate() - 2);
-
     const expectedDischarge = new Date(today);
     expectedDischarge.setDate(expectedDischarge.getDate() + 3);
-
     await Bed.findByIdAndUpdate(cardBed._id, {
       status: "occupied",
       currentPatient: arunPatient._id,
       assignedAt: allocatedAt,
       expectedDischargeDate: expectedDischarge,
     });
-
     await BedAllocation.create({
       bed: cardBed._id,
       patient: arunPatient._id,
@@ -1083,71 +981,68 @@ async function seed() {
         "Admitted for cardiac monitoring following episode of chest pain and elevated troponin",
       allocatedAt,
       expectedDischargeDate: expectedDischarge,
-      status: "active",
     });
-    console.log("🛏   1 bed allocation created (Arun Prakash → CARD-B-03)\n");
   }
 
-  // ==========================================
-  // EMERGENCYFLOW AI SEED DATA (Hospitals & Resources)
-  // ==========================================
-  console.log("🏥  Seeding hospitals & resources for EmergencyFlow AI...");
-  
-  const hospitalsData = [
-    {
-      name: "Santosh Medical Center",
-      code: "SMC-MAIN",
-      location: { lat: 13.0827, lng: 80.2707, address: "123 Health Ave, Chennai" },
-      specialties: ["Cardiology", "Neurology", "Trauma", "Pediatrics"],
-      traumaLevel: 1,
-      contact: { phone: "9000000000", email: "contact@santoshmedical.com" },
-      isActive: true,
-    },
+  // EMERGENCYFLOW AI SEED DATA
+  console.log("🏥  Seeding EmergencyFlow regional hospitals...");
+  const HOSPITALS_DATA = [
     {
       name: "City General Hospital",
       code: "CGH-CITY",
-      location: { lat: 13.0604, lng: 80.2496, address: "456 City Rd, Chennai" },
-      specialties: ["General Medicine", "Orthopedics", "Emergency"],
+      location: { lat: 13.0827, lng: 80.2707, address: "Park Town, Chennai" },
+      specialties: ["Cardiology", "Emergency", "Trauma", "ICU"],
+      traumaLevel: 1,
+      contact: { phone: "044-25305000", email: "emergency@citygeneral.org" },
+      isActive: true,
+    },
+    {
+      name: "Santosh Medical Center",
+      code: "SMC-MAIN",
+      location: { lat: 13.0674, lng: 80.2376, address: "Anna Salai, Chennai" },
+      specialties: ["General Medicine", "Pulmonology", "ICU", "Pediatrics"],
       traumaLevel: 2,
-      contact: { phone: "9000000099", email: "info@citygeneral.com" },
+      contact: { phone: "044-42000000", email: "info@santoshmedical.org" },
       isActive: true,
     },
     {
       name: "St. Jude's Trauma Center",
       code: "SJT-TRAUMA",
-      location: { lat: 13.0475, lng: 80.2090, address: "789 Emergency Blvd, Chennai" },
-      specialties: ["Trauma", "Burns", "Neurosurgery"],
+      location: { lat: 13.0067, lng: 80.2571, address: "Adyar, Chennai" },
+      specialties: ["Trauma", "Orthopedics", "Neurosurgery", "Emergency"],
       traumaLevel: 1,
-      contact: { phone: "9000000088", email: "trauma@stjudes.com" },
-      isActive: true,
-    },
-    {
-      name: "Mercy Care Clinic",
-      code: "MCC-CLINIC",
-      location: { lat: 13.0140, lng: 80.2175, address: "321 South St, Chennai" },
-      specialties: ["General Medicine", "Maternity"],
-      traumaLevel: 4,
-      contact: { phone: "9000000077", email: "help@mercycare.com" },
+      contact: { phone: "044-24910000", email: "trauma@stjudes.org" },
       isActive: true,
     },
     {
       name: "Apex Regional Hospital",
-      code: "ARH-REGIONAL",
-      location: { lat: 13.1067, lng: 80.2206, address: "999 North Highway, Chennai" },
-      specialties: ["Cardiology", "Oncology", "ICU"],
+      code: "ARH-APEX",
+      location: { lat: 13.0418, lng: 80.1994, address: "Koyambedu, Chennai" },
+      specialties: ["Multi-Specialty", "ICU", "Burn Unit", "Pediatrics"],
       traumaLevel: 2,
-      contact: { phone: "9000000066", email: "admin@apexregional.com" },
+      contact: { phone: "044-24790000", email: "help@apexregional.org" },
       isActive: true,
-    }
+    },
+    {
+      name: "Metro Community Clinic",
+      code: "MCC-CLINIC",
+      location: { lat: 12.9815, lng: 80.218, address: "Velachery, Chennai" },
+      specialties: ["Primary Care", "Emergency Beds"],
+      traumaLevel: 3,
+      contact: { phone: "044-22430000", email: "triage@metroclinic.org" },
+      isActive: true,
+    },
   ];
 
-  const insertedHospitals = await Hospital.insertMany(hospitalsData);
+  const insertedHospitals = await Hospital.insertMany(HOSPITALS_DATA);
+  const hospitalMap = new Map<string, (typeof insertedHospitals)[0]>();
+  insertedHospitals.forEach((h) => hospitalMap.set(h.code, h));
 
   const resourceTemplates = [
-    { type: "icu_bed", total: 10, occupied: 6, reserved: 1, maintenance: 1, available: 2 },
-    { type: "emergency_bed", total: 20, occupied: 15, reserved: 0, maintenance: 0, available: 5 },
-    { type: "oxygen", total: 50, occupied: 20, reserved: 0, maintenance: 0, available: 30 },
-    { type: "blood_o_neg", total: 40, occupied: 0, reserved: 5, maintenance: 0, available: 35 },
+    { type: "icu_bed", total: 10, occupied: 7, reserved: 1, maintenance: 0, available: 2 },
+    { type: "emergency_bed", total: 20, occupied: 12, reserved: 2, maintenance: 1, available: 5 },
+    { type: "oxygen", total: 50, occupied: 30, reserved: 5, maintenance: 0, available: 15 },
+    { type: "blood_o_neg", total: 15, occupied: 8, reserved: 2, maintenance: 0, available: 5 },
     { type: "ambulance", total: 4, occupied: 2, reserved: 0, maintenance: 1, available: 1 },
     { type: "trauma_nurse", total: 15, occupied: 10, reserved: 0, maintenance: 0, available: 5 },
   ];
@@ -1157,6 +1052,7 @@ async function seed() {
   for (const hospital of insertedHospitals) {
     const isCityGeneral = hospital.code === "CGH-CITY";
     const isSantosh = hospital.code === "SMC-MAIN";
+    const isStJudes = hospital.code === "SJT-TRAUMA";
     
     // Seed Aggregate Resources
     for (const tmpl of resourceTemplates) {
@@ -1164,6 +1060,11 @@ async function seed() {
       if (isSantosh) {
         total = Math.round(total * 1.5);
         occupied = Math.round(occupied * 1.5);
+        available = total - occupied - reserved - maintenance;
+      }
+      if (isStJudes) {
+        total = Math.round(total * 1.3);
+        occupied = Math.round(occupied * 1.2);
         available = total - occupied - reserved - maintenance;
       }
       
@@ -1175,14 +1076,14 @@ async function seed() {
       });
     }
 
-    // Seed Ventilators
-    const ventTotal = hospital.code === "MCC-CLINIC" ? 2 : (isSantosh ? 8 : 6);
+    // Seed Ventilators — KEY DEMO SCENARIO
+    const ventTotal = hospital.code === "MCC-CLINIC" ? 2 : (isSantosh ? 8 : isStJudes ? 7 : 6);
     
     if (isCityGeneral) {
-      // Edge Case: All occupied, with different release times (for AI forecasting testing)
+      // DEMO SCENARIO: All ventilators occupied with different release times
       for (let i = 0; i < ventTotal; i++) {
-        const hoursAhead = 2 + Math.random() * 46; // 2 to 48 hours
-        const confidence = 0.4 + Math.random() * 0.55; // 0.4 to 0.95
+        const hoursAhead = 2 + Math.random() * 46;
+        const confidence = 0.4 + Math.random() * 0.55;
         resourcesData.push({
           hospitalId: hospital._id,
           type: "ventilator",
@@ -1215,23 +1116,84 @@ async function seed() {
   }
 
   await Resource.insertMany(resourcesData);
-  console.log(`    ↳ ${insertedHospitals.length} hospitals and ${resourcesData.length} resources created\n`);
+  console.log(`    ➜ ${insertedHospitals.length} hospitals and ${resourcesData.length} resources created\n`);
 
-  // ── Summary ────────────────────────────────────────────────────────────────
-  console.log("══════════════════════════════════════════════");
-  console.log("✅  SEED COMPLETE\n");
-  console.log("📋  Demo Login Credentials (password: Demo@1234)");
-  console.log("────────────────────────────────────────────────");
+  // ACTIVE DEMO INCIDENT: Highway Bus Crash
+  console.log("🚨  Creating active demo incident (highway bus crash)...");
+  const demoIncident = await Incident.create({
+    eventType: "Highway Bus Crash — Multiple Casualties with Respiratory Distress",
+    location: {
+      address: "NH-45 near Sholinganallur junction, Chennai",
+      coordinates: {
+        type: "Point",
+        coordinates: [80.2370, 12.9010],
+      },
+    },
+    severity: "critical",
+    reportedCasualties: 12,
+    confidenceScore: 0.92,
+    source: "Emergency Services Radio — Ambulance Dispatch",
+    status: "active",
+    weatherLinked: true,
+    predictedArrivals: 8,
+    createdBy: adminUser._id,
+  });
+  console.log(`    ➜ Demo incident created: ${demoIncident.eventType}\n`);
+
+  // PENDING RECOMMENDATION (ready for approval)
+  console.log("⚡  Creating pending recommendation for approval...");
+  const stJudesHospital = hospitalMap.get("SJT-TRAUMA")!;
+  
+  await Recommendation.create({
+    incidentId: demoIncident._id,
+    type: "allocation",
+    targetHospitalId: stJudesHospital._id,
+    patientIds: [],
+    resourceRequests: [
+      { type: "ventilator", quantity: 3 },
+      { type: "icu_bed", quantity: 3 },
+      { type: "emergency_bed", quantity: 5 },
+      { type: "trauma_nurse", quantity: 4 },
+      { type: "blood_o_neg", quantity: 6 },
+    ],
+    explanation: [
+      "Rank #1 for incident 'Highway Bus Crash' — composite score 82.4/100",
+      "Distance: 12.8 km from incident (~24 min by ambulance) -> distance score 60/100",
+      "Care-bundle match 95/100 -> ventilator 4 available, ICU 3 available, trauma nurses 6 available",
+      "Current load: weighted utilization 58% across required resources -> load score 72/100",
+      "Surge capacity: 18 units of headroom against 8 predicted arrivals -> surge score 95/100",
+      "Incident context: severity=critical, predicted arrivals=8, source confidence=0.92",
+      "Action plan: route patients to SJT-TRAUMA; reserve ventilators: 3 ventilator; reserve beds: 3 icu_bed, 5 emergency_bed; stage trauma team: 4 trauma_nurse; reserve blood: 6 blood_o_neg",
+      "Alternative #2: Apex Regional Hospital (composite 71.2/100)",
+      "Alternative #3: Santosh Medical Center (composite 68.9/100)",
+      "Human approval required before any resource is committed.",
+    ],
+    confidence: 0.87,
+    status: "pending",
+    humanApprovalRequired: true,
+  });
+  console.log(`    ➜ Pending recommendation created for ${stJudesHospital.name}\n`);
+
+  console.log("=========================================================");
+  console.log("✅  SEED COMPLETE — EmergencyFlow demo scenario ready!\n");
+  console.log("⚡  Demo Login Credentials (password: Demo@1234)");
+  console.log("---------------------------------------------------------");
   console.log("  Role        │ Email");
-  console.log("  ────────────┼──────────────────────────────");
+  console.log("  -------------------------------------------------------");
   console.log("  Admin       │ admin@mediqueue.com");
   console.log("  Reception   │ reception@mediqueue.com");
   console.log("  Nurse       │ nurse1@mediqueue.com");
   console.log("  Doctor      │ dr.arjun@mediqueue.com  (Cardiology)");
-  console.log("  Doctor      │ dr.sunita@mediqueue.com (General Medicine)");
+  console.log("  Doctor      │ dr.vikram@mediqueue.com (Emergency)");
   console.log("  Patient     │ rajesh.krishnan@gmail.com");
   console.log("  Patient     │ arun.p@gmail.com");
-  console.log("══════════════════════════════════════════════\n");
+  console.log("=========================================================\n");
+  console.log("🚨  DEMO SCENARIO ACTIVE:");
+  console.log("   • Active incident: Highway Bus Crash (critical severity)");
+  console.log("   • City General Hospital: 0 ventilators available (all occupied)");
+  console.log("   • Pending recommendation for St. Jude's Trauma Center");
+  console.log("   • Weather risk: HIGH (linked to incident)");
+  console.log("=========================================================\n");
 
   await mongoose.disconnect();
   process.exit(0);

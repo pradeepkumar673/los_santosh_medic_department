@@ -28,6 +28,7 @@ import VentilatorDashboard from "../pages/emergency/VentilatorDashboard";
 import IncidentDetail from "../pages/emergency/IncidentDetail";
 import CreateIncidentPage from "../pages/emergency/CreateIncidentPage";
 import RecommendationsPage from "../pages/emergency/RecommendationsPage";
+import Simulator from "../pages/emergency/Simulator";
 
 export const router = createBrowserRouter([
   /* Auth routes */
@@ -115,13 +116,14 @@ export const router = createBrowserRouter([
           /* EmergencyFlow AI */
           {
             path: "emergency",
-            element: <RoleRoute allowedRoles={["admin", "doctor", "nurse"]} />,
+            element: <RoleRoute allowedRoles={["admin", "doctor", "nurse", "reception"]} />,
             children: [
               { index: true, element: <CommandCenter /> },
               { path: "ventilators", element: <VentilatorDashboard /> },
               { path: "incidents/new", element: <CreateIncidentPage /> },
               { path: "incidents/:id", element: <IncidentDetail /> },
               { path: "recommendations", element: <RecommendationsPage /> },
+              { path: "simulator", element: <Simulator /> },
             ],
           },
         ],

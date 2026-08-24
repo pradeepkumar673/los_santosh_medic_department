@@ -8,6 +8,7 @@ import {
   ClipboardList,
   ShieldPlus,
   Siren,
+  FlaskConical,
 } from "lucide-react";
 import type { UserRole } from "../types/auth.types";
 
@@ -26,17 +27,20 @@ export const SIDEBAR_ITEMS: Record<UserRole, SidebarItem[]> = {
     { label: "Beds", path: "/admin/beds", icon: BedDouble },
     { label: "Appointments", path: "/admin/appointments", icon: CalendarClock },
     { label: "Emergency Command", path: "/emergency", icon: Siren },
+    { label: "What-If Simulator", path: "/emergency/simulator", icon: FlaskConical },
   ],
   doctor: [
     { label: "Dashboard", path: "/doctor", icon: LayoutDashboard },
     { label: "My Queue", path: "/doctor/queue", icon: ListChecks },
     { label: "Emergency Command", path: "/emergency", icon: Siren },
+    { label: "What-If Simulator", path: "/emergency/simulator", icon: FlaskConical },
   ],
   nurse: [
     { label: "Dashboard", path: "/nurse", icon: LayoutDashboard },
     { label: "Queue", path: "/nurse/queue", icon: ListChecks },
     { label: "Assessments", path: "/nurse/assessments", icon: ClipboardList },
     { label: "Emergency Command", path: "/emergency", icon: Siren },
+    { label: "What-If Simulator", path: "/emergency/simulator", icon: FlaskConical },
   ],
   reception: [
     { label: "Dashboard", path: "/reception", icon: LayoutDashboard },
@@ -44,6 +48,8 @@ export const SIDEBAR_ITEMS: Record<UserRole, SidebarItem[]> = {
     { label: "Appointments", path: "/reception/appointments", icon: CalendarClock },
     { label: "Beds", path: "/reception/beds", icon: BedDouble },
     { label: "Patients", path: "/reception/patients", icon: Users },
+    { label: "Emergency Command", path: "/emergency", icon: Siren },
+    { label: "What-If Simulator", path: "/emergency/simulator", icon: FlaskConical },
   ],
   patient: [
     { label: "Dashboard", path: "/patient", icon: LayoutDashboard },
